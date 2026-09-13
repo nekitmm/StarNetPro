@@ -1,0 +1,11 @@
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+dist/
+*.p12
+*.mobileprovision
+.env
+StarNetBin/*
+!StarNetBin/README.md
