@@ -2,13 +2,16 @@ import Foundation
 import CryptoKit
 
 /// Only downloads; Apple Installer owns authorization and installation.
-final class InstallerService: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let onProgress: (Double) -> Void
-    private let maximumBytes: Int64
+final class InstallerService: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    enum Phase: String, Sendable {
+        case downloading = "Downloading the official installer…"
+        case verifying = "Verifying the installer…"
+        case checkingTrust = "Checking installer trust with macOS…"
+    }
+    private let onPhase: @MainActor @Sendable (Phase) -> Void
 
-    init(maximumBytes: Int64 = 2_000_000_000, onProgress: @escaping (Double) -> Void = { _ in }) {
-        self.maximumBytes = maximumBytes
-        self.onProgress = onProgress
+    init(onPhase: @escaping @MainActor @Sendable (Phase) -> Void = { _ in }) {
+        self.onPhase = onPhase
     }
 
     static func allowed(_ url: URL) -> Bool {
@@ -22,19 +25,6 @@ final class InstallerService: NSObject, URLSessionDownloadDelegate, @unchecked S
                     completionHandler: @escaping (URLRequest?) -> Void) {
         completionHandler(request.url.map(Self.allowed) == true ? request : nil)
     }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
-        if totalBytesWritten > maximumBytes { downloadTask.cancel(); return }
-        if totalBytesExpectedToWrite > 0 {
-            let fraction = min(1, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
-            DispatchQueue.main.async { self.onProgress(fraction) }
-        }
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {}
 
     private func session() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
@@ -83,15 +73,20 @@ final class InstallerService: NSObject, URLSessionDownloadDelegate, @unchecked S
         try package.validate()
         let session = session()
         defer { session.invalidateAndCancel() }
+        // The async download API did not deliver download-delegate byte callbacks
+        // on the tested macOS runtime. Report explicit phases, not a false percentage.
+        await onPhase(.downloading)
         let (file, response) = try await session.download(for: URLRequest(url: package.url), delegate: self)
         defer { try? FileManager.default.removeItem(at: file) }
         try Self.validateResponse(response)
+        await onPhase(.verifying)
         try Self.verify(file, package: package)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("StarNetPro-installer-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let installer = directory.appendingPathComponent("StarNet2.pkg")
         do {
             try FileManager.default.moveItem(at: file, to: installer)
+            await onPhase(.checkingTrust)
             let trust = try await CLIProcess.capture(URL(fileURLWithPath: "/usr/sbin/spctl"),
                                                     ["--assess", "--type", "install", installer.path], timeout: 60)
             guard trust.status == 0, !trust.cancelled else {

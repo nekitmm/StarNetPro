@@ -19,7 +19,6 @@ final class StarNetProcessor: ObservableObject {
     @Published var setupMessage = "Checking for StarNet2…"
     @Published var isChecking = false
     @Published var isDownloading = false
-    @Published var downloadProgress: Double = 0
     @Published var latestRelease: CLIRelease?
     @Published var updateMessage = ""
     @Published var licenseText = ""
@@ -157,18 +156,18 @@ final class StarNetProcessor: ObservableObject {
     func downloadAndInstall() async {
         guard !busy else { return }
         isDownloading = true
-        downloadProgress = 0
         defer { isDownloading = false }
-        updateMessage = "Downloading the official installer…"
+        updateMessage = "Finding the latest installer…"
         do {
             let release = try await InstallerService().latest(platform: CLIContract.nativePlatform)
             latestRelease = release
             guard let package = release.packages["installer"] else {
                 throw CLIError.message("The official feed has no Mac installer.")
             }
-            let installer = try await InstallerService(maximumBytes: package.size_bytes) { [weak self] value in
-                self?.downloadProgress = value
+            let installer = try await InstallerService { [weak self] phase in
+                self?.updateMessage = phase.rawValue
             }.download(package)
+            updateMessage = "Opening Apple Installer…"
             guard NSWorkspace.shared.open(installer) else {
                 throw CLIError.message("Could not open Apple Installer. Download the CLI from the official website.")
             }

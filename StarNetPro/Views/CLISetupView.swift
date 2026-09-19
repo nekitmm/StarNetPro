@@ -32,11 +32,12 @@ struct CLISetupView: View {
             Button("Check for CLI Updates") { Task { await processor.checkUpdates() } }
             Toggle("Check on Launch", isOn: $processor.automaticallyCheckUpdates)
                 .font(.caption)
-            if !processor.updateMessage.isEmpty {
-                Text(processor.updateMessage).font(.caption).textSelection(.enabled)
-            }
             if processor.isDownloading {
-                ProgressView(value: processor.downloadProgress)
+                ProgressView(processor.updateMessage)
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+            } else if !processor.updateMessage.isEmpty {
+                Text(processor.updateMessage).font(.caption).textSelection(.enabled)
             }
             Link("Download Manually", destination: CLIContract.downloadPage)
         }

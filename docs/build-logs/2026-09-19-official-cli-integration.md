@@ -79,3 +79,24 @@
   ZIP SHA-256: 2f5fce853ce2f25036b6f739763f65d182e26e187be8eb12dc5a6a80aca92efe.
 - Draft upstream PR: https://github.com/leohgyang/StarNetPro/pull/1.
   Code commit: 0838b04. Upgrade-path UAT is in progress; no merge/release claimed.
+
+## Download indicator UAT correction
+
+- User reported the download bar stayed at zero until Apple Installer opened.
+- Reproduced with the actual installer verifier: the server advertised
+  Content-Length: 128085271, but the async URLSession download delivered zero
+  didWriteData callbacks to our delegate while successfully downloading/verifying.
+- Replaced the misleading bar with an indeterminate spinner and explicit
+  metadata/download/checksum/macOS trust/opening stages. Removed the unused byte
+  progress state/delegate path; retained exact final size/hash/trust checks and
+  allowed-origin redirect policy. Inference's real tile progress is unchanged.
+- Real installer verifier now requires all three service phase callbacks in
+  order, on the main actor, before success. No automatic installation is tested.
+- Verification: all 21 native tests passed; actual 128085271-byte official
+  installer passed phase-order assertion, SHA-256 validation and spctl install
+  trust assessment. No installer was opened by the automated test.
+- Rebuilt and signature-verified local app is in Mac Downloads/
+  StarNetPro-CLI-upgrade-r3/StarNetPro.app. ZIP SHA-256:
+  e8c17b1df76af7c10c4e3d81a787cd40b6da09376894803761fe41fe96763013.
+  Installed CLI still reported 2.5.0 before the tests; no system install changed.
+  Spinner's visual behavior remains for user UAT, distinct from service-phase tests.

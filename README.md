@@ -10,6 +10,8 @@ created by Sunny Ma. This is not an official StarNet product.
 2. If it is missing or incompatible, click **Download and Install CLI…**.
    The app fetches the latest release for your Mac from StarNetAstro, verifies
    the installer's size and SHA-256, and asks macOS to assess its trust.
+   A spinner identifies the current download/verification stage; it does not
+   claim a transfer percentage.
 3. Apple Installer opens. Review the package and approve installation there.
    StarNetPro never asks for your administrator password or installs silently.
 4. Return to StarNetPro and click **Refresh CLI** if necessary. Review and accept
