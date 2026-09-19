@@ -14,10 +14,11 @@ created by Sunny Ma. This is not an official StarNet product.
    claim a transfer percentage.
 3. Apple Installer opens. Review the package and approve installation there.
    StarNetPro never asks for your administrator password or installs silently.
-4. Return to StarNetPro; it rechecks the installation automatically. **Skip** uses
-   an already compatible CLI instead of installing again. If its terms have not
-   been accepted, Skip opens the license dialog first. Acceptance is remembered;
-   changed license contents require renewed acceptance.
+4. Return to StarNetPro; it rechecks the installation and opens the StarNet2
+   license automatically. Accept it to enter the workspace. Closing the dialog
+   leaves a **Review License…** button, not the download screen. An already
+   compatible CLI skips installation; previously accepted terms skip this step
+   too. Changed license contents require renewed acceptance.
 5. Open a TIFF, PNG or JPEG, choose the stride and output mode, and process it.
    **Stars Only** saves the CLI's subtractive star mask instead of its starless
    output. Output is saved as TIFF.

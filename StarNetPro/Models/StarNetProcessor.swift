@@ -35,6 +35,7 @@ final class StarNetProcessor: ObservableObject {
     private var decoder = JSONLines()
     private var stdoutDecoder = JSONLines()
     private var licenseHash = ""
+    private var promptedLicenseHash = ""
     private let defaults: UserDefaults
     private var isCancelling = false
     private var checkingUpdates = false
@@ -42,7 +43,8 @@ final class StarNetProcessor: ObservableObject {
 
     var busy: Bool { isProcessing || isChecking || isDownloading }
     var workspaceAvailable: Bool { cliInfo != nil && licenseAccepted }
-    var canSkipSetup: Bool { cliInfo != nil && !busy }
+    var needsLicenseAcceptance: Bool { cliInfo != nil && !licenseAccepted }
+    var canReviewLicense: Bool { needsLicenseAcceptance && !busy }
     var canProcess: Bool { !busy && cliInfo != nil && licenseAccepted && inputPath != nil }
     var newerReleaseAvailable: Bool {
         guard let latest = try? latestRelease?.releaseVersion else { return false }
@@ -91,6 +93,10 @@ final class StarNetProcessor: ObservableObject {
                 cliURL = url
                 setupMessage = info.label
                 setupSummary = "StarNet2 \(info.version) is installed."
+                if !licenseAccepted && promptedLicenseHash != licenseHash {
+                    promptedLicenseHash = licenseHash
+                    showLicense = true
+                }
                 return
             } catch {
                 summary = "Update StarNet2 to continue."
@@ -109,6 +115,8 @@ final class StarNetProcessor: ObservableObject {
         cliURL = nil
         licenseAccepted = false
         licenseText = ""
+        licenseHash = ""
+        showLicense = false
         setupSummary = summary
         setupMessage = failures.isEmpty ? "Install the official StarNet2 CLI to start processing." :
             "No compatible StarNet2 installation found.\n" + failures.joined(separator: "\n")
@@ -132,7 +140,7 @@ final class StarNetProcessor: ObservableObject {
     }
 
     func acceptLicense() {
-        guard !licenseHash.isEmpty else { return }
+        guard cliInfo != nil, !busy, !licenseHash.isEmpty else { return }
         defaults.set(licenseHash, forKey: "acceptedStarNetLicenseSHA256")
         licenseAccepted = true
         showLicense = false
@@ -189,10 +197,9 @@ final class StarNetProcessor: ObservableObject {
         if !busy { Task { await refreshCLI() } }
     }
 
-    func skipSetup() {
-        guard canSkipSetup else { return }
-        // Skip installation, never compatibility checks or license acceptance.
-        if !licenseAccepted { showLicense = true }
+    func reviewLicense() {
+        guard canReviewLicense else { return }
+        showLicense = true
     }
 
     func openImage() {

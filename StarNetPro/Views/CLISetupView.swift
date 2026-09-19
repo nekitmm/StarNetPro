@@ -52,32 +52,35 @@ struct CLIOnboardingView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Image(systemName: "sparkles.rectangle.stack")
                     .font(.system(size: 40)).foregroundStyle(.tint)
-                Text("Set up StarNet2")
+                Text(processor.needsLicenseAcceptance ? "Review StarNet2 License" : "Set up StarNet2")
                     .font(.largeTitle).fontWeight(.semibold)
                 Text(processor.setupSummary)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 12) {
+                if processor.needsLicenseAcceptance {
+                    Text("Accept the license terms to start processing.")
+                        .foregroundStyle(.secondary)
+                    Button("Review License…", action: processor.reviewLicense)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(processor.busy)
+                } else {
                     Button("Download and Install…") { Task { await processor.downloadAndInstall() } }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                         .disabled(processor.busy)
-                    if processor.cliInfo != nil {
-                        Button("Skip", action: processor.skipSetup)
-                            .disabled(!processor.canSkipSetup)
+                    Toggle("Check on Launch", isOn: $processor.automaticallyCheckUpdates)
+                        .toggleStyle(.checkbox)
+                        .disabled(processor.busy)
+                    Link("Download Manually", destination: CLIContract.downloadPage)
+                    if processor.isDownloading {
+                        ProgressView(processor.updateMessage)
+                            .progressViewStyle(.circular)
+                            .controlSize(.small)
+                    } else if processor.isChecking {
+                        ProgressView().controlSize(.small)
+                    } else if !processor.updateMessage.isEmpty {
+                        Text(processor.updateMessage).font(.caption).foregroundStyle(.secondary)
                     }
-                }
-                .controlSize(.large)
-                Toggle("Check on Launch", isOn: $processor.automaticallyCheckUpdates)
-                    .toggleStyle(.checkbox)
-                    .disabled(processor.busy)
-                Link("Download Manually", destination: CLIContract.downloadPage)
-                if processor.isDownloading {
-                    ProgressView(processor.updateMessage)
-                        .progressViewStyle(.circular)
-                        .controlSize(.small)
-                } else if processor.isChecking {
-                    ProgressView().controlSize(.small)
-                } else if !processor.updateMessage.isEmpty {
-                    Text(processor.updateMessage).font(.caption).foregroundStyle(.secondary)
                 }
             }
             .padding(36)
@@ -109,7 +112,7 @@ struct LicenseView: View {
                 Button("Close") { processor.showLicense = false }
                 Spacer()
                 if !processor.licenseAccepted {
-                    Button("Accept", action: processor.acceptLicense).disabled(!agreed)
+                    Button("Accept", action: processor.acceptLicense).disabled(!agreed || processor.busy)
                 }
             }
         }

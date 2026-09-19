@@ -126,3 +126,32 @@
   New local UAT app: Downloads/StarNetPro-CLI-upgrade-r4/StarNetPro.app.
   ZIP SHA-256: 6407a8ee55ff5f9e797ea651672d8f46f39b3a02c925b5bc84c5a1778eee41e7.
   Revealed in Finder. Visual approval is pending; no public release was made.
+
+## Post-install license transition correction
+
+- User completed installation but remained on the download screen. Root cause:
+  workspaceAvailable required license acceptance, while the same onboarding view
+  served both missing-CLI and pending-license states. The hidden next step was
+  the misleading Skip action; successful detection never presented the license.
+- Added a fake executable upgrade regression: 2.5.0 -> 2.6.2 at the same path,
+  automatic license presentation, dismissal/reprobe, explicit review, acceptance,
+  and relaunch. It failed on the previous code (xcodebuild exit 65); the other
+  21 tests passed. This demonstrates the missing transition independently of UAT.
+- Compatible detection now automatically presents unaccepted terms once per
+  license hash per app session. Closing leaves only a clearly labeled license
+  step, with no install controls. Acceptance opens the workspace. Repeated
+  activation respects dismissal; changed terms prompt again. Failed discovery
+  clears stale license state, and acceptance is disabled during probing.
+- All 22 tests passed after the fix; native Release build and strict signature
+  verification passed. The previously recorded Xcode exit-code-zero diagnostic
+  persists. git diff --check passed; no upstream pre-commit config exists.
+- The user's installed /usr/local/bin/starnet2 now reports 2.6.2-0241 CoreML.
+  verify-setup, compiled with production models and isolated preferences, reports
+  compatible=true, needs license=true, prompt open=true. No system installation
+  or real license preference was modified by this verification.
+- UAT app: Downloads/StarNetPro-CLI-upgrade-r5/StarNetPro.app on the Mac, revealed
+  in Finder. ZIP SHA-256:
+  efdee12918a74ac8ca7ac94193349c028f508ade8464d16a03bbfb3fac34f878.
+  Visual UAT remains for the user. No public packaging/release was performed.
+- Separately explained the standard Mac close-window versus quit behavior; no
+  last-window termination change requested or implemented.
