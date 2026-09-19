@@ -67,11 +67,13 @@ struct MainView: View {
 // 侧边栏视图
 struct SidebarView: View {
     @EnvironmentObject var processor: StarNetProcessor
+    @State private var showAdvanced = false
 
     var body: some View {
         List {
             Section(header: Text("StarNet2 CLI")) {
-                CLISetupView()
+                Text(processor.cliInfo?.version ?? "—")
+                    .textSelection(.enabled)
             }
             Section(header: Text("Settings")) {
                 VStack(alignment: .leading, spacing: 15) {
@@ -92,10 +94,14 @@ struct SidebarView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    Toggle("Stars Only", isOn: $processor.maskmode)
-                        .toggleStyle(SwitchToggleStyle())
-
-                    Text("Enable to export stars; disable for a starless image.")
+                    Text("Star layers").font(.headline)
+                    Toggle("Difference", isOn: $processor.createDifference)
+                        .toggleStyle(.checkbox)
+                        .help("Save stars for recombination using Add (Linear Dodge).")
+                    Toggle("Unscreen", isOn: $processor.createUnscreen)
+                        .toggleStyle(.checkbox)
+                        .help("Save stars for recombination using Screen.")
+                    Text("Save separate TIFFs alongside the starless image.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -103,12 +109,14 @@ struct SidebarView: View {
                 .disabled(processor.busy)
             }
 
-            Section(header: Text("Help & Support")) {
-                Link("StarNet2 Downloads", destination: CLIContract.downloadPage)
-                Link("StarNetPro GitHub", destination: URL(string: "https://github.com/leohgyang/StarNetPro/")!)
-                Spacer()
-                Button("Report an Issue") {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/leohgyang/StarNetPro/issues")!)
+            Section {
+                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                    CLISetupView()
+                        .padding(.vertical, 8)
+                    Link("StarNetPro GitHub", destination: URL(string: "https://github.com/leohgyang/StarNetPro/")!)
+                    Button("Report an Issue") {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/leohgyang/StarNetPro/issues")!)
+                    }
                 }
             }
         }
@@ -144,7 +152,7 @@ struct ImagePreviewSection: View {
                     Spacer()
 
                     if processor.outputImage != nil {
-                        Button("Show Saved Result") {
+                        Button("Show Saved Results") {
                             processor.showInFinder(url: processor.outputPath)
                         }
                     }

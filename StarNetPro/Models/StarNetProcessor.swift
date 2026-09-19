@@ -13,7 +13,8 @@ final class StarNetProcessor: ObservableObject {
     @Published var progress: Double = 0
     @Published var progressLabel = ""
     @Published var strideValue = 256
-    @Published var maskmode = false
+    @Published var createDifference = false
+    @Published var createUnscreen = false
     @Published var cliInfo: CLIInfo?
     @Published var cliURL: URL?
     @Published var setupMessage = "Checking for StarNet2…"
@@ -31,6 +32,7 @@ final class StarNetProcessor: ObservableObject {
 
     var inputPath: URL?
     var outputPath: URL?
+    var savedOutputPaths: [URL] = []
     private var runner: CLIProcess?
     private var decoder = JSONLines()
     private var stdoutDecoder = JSONLines()
@@ -220,6 +222,7 @@ final class StarNetProcessor: ObservableObject {
         inputPath = url
         inputImage = image
         outputPath = nil
+        savedOutputPaths = []
         outputImage = nil
         appendLog("Image loaded: \(url.path)")
     }
@@ -237,30 +240,46 @@ final class StarNetProcessor: ObservableObject {
     private func chooseDestination(executable: URL, input: URL) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.tiff]
-        panel.nameFieldStringValue = (maskmode ? "stars_" : "starless_") + input.deletingPathExtension().lastPathComponent + ".tiff"
+        panel.nameFieldStringValue = "starless_" + input.deletingPathExtension().lastPathComponent + ".tiff"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         guard destination.resolvingSymlinksInPath().standardizedFileURL != input.resolvingSymlinksInPath().standardizedFileURL else {
             appendLog("The output must not overwrite the input file.")
             return
         }
+        let difference = createDifference ? CLIContract.companionURL(destination, suffix: "difference") : nil
+        let unscreen = createUnscreen ? CLIContract.companionURL(destination, suffix: "unscreen") : nil
+        let existing = [difference, unscreen].compactMap { $0 }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        if !existing.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Replace existing star outputs?"
+            alert.informativeText = existing.map(\.path).joined(separator: "\n")
+            alert.addButton(withTitle: "Replace")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
         startProcessing(executable: executable, input: input, destination: destination,
-                        starsOnly: maskmode, stride: strideValue)
+                        difference: difference, unscreen: unscreen, stride: strideValue)
     }
 
     /// UI and integration tests use the same runner; original image files are passed unchanged.
-    func startProcessing(executable: URL, input: URL, destination: URL, starsOnly: Bool, stride: Int) {
+    func startProcessing(executable: URL, input: URL, destination: URL,
+                         difference: URL? = nil, unscreen: URL? = nil, stride: Int) {
         guard !isProcessing else { return }
-        guard destination.resolvingSymlinksInPath().standardizedFileURL != input.resolvingSymlinksInPath().standardizedFileURL else {
-            appendLog("The output must not overwrite the input file.")
+        let destinations = [destination, difference, unscreen].compactMap { $0 }
+        do {
+            try CLIContract.validateDestinations(input: input, outputs: destinations)
+        } catch {
+            appendLog(error.localizedDescription)
             return
         }
         let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("StarNetPro-run-" + UUID().uuidString)
         do {
             try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: false)
             let starless = scratch.appendingPathComponent("starless.tiff")
-            let stars = starsOnly ? scratch.appendingPathComponent("stars.tiff") : nil
-            let selected = stars ?? starless
-            let args = try CLIContract.arguments(input: input, output: starless, stars: stars, stride: stride)
+            let stars = difference.map { _ in scratch.appendingPathComponent("difference.tiff") }
+            let screened = unscreen.map { _ in scratch.appendingPathComponent("unscreen.tiff") }
+            let generated = [starless, stars, screened].compactMap { $0 }
+            let args = try CLIContract.arguments(input: input, output: starless, stars: stars, unscreen: screened, stride: stride)
             runID = UUID()
             let id = runID
             isProcessing = true
@@ -271,6 +290,7 @@ final class StarNetProcessor: ObservableObject {
             stdoutDecoder = JSONLines()
             outputImage = nil
             outputPath = nil
+            savedOutputPaths = []
             log = "Processing with StarNet2\nExecutable: \(executable.path)\nInput: \(input.path)\n"
             runner = CLIProcess()
             runner?.run(executable: executable, arguments: args, onData: { [weak self] data, stderr in
@@ -294,19 +314,30 @@ final class StarNetProcessor: ObservableObject {
                     guard result.status == 0 else {
                         throw CLIError.message("StarNet2 exited with code \(result.status). See the processing log.")
                     }
-                    guard let image = NSImage(contentsOf: selected) else {
-                        throw CLIError.message("StarNet2 did not produce a readable output image.")
+                    // Check the complete requested set before touching any user destination.
+                    let images = try generated.map { url -> NSImage in
+                        guard let image = NSImage(contentsOf: url) else {
+                            throw CLIError.message("StarNet2 did not produce a readable \(url.lastPathComponent).")
+                        }
+                        return image
                     }
-                    try Data(contentsOf: selected, options: .mappedIfSafe).write(to: destination, options: .atomic)
+                    try CLIContract.validateDestinations(input: input, outputs: destinations)
+                    for (source, target) in zip(generated, destinations) {
+                        try Data(contentsOf: source, options: .mappedIfSafe).write(to: target, options: .atomic)
+                        self.savedOutputPaths.append(target)
+                        self.appendLog("Saved result: \(target.path)")
+                    }
                     self.outputPath = destination
-                    self.outputImage = image
+                    self.outputImage = images[0]
                     self.progress = 1
                     self.progressLabel = "Complete."
-                    self.appendLog("Saved result: \(destination.path)")
                 } catch {
                     self.progress = 0
                     self.progressLabel = "Processing failed."
                     self.appendLog(error.localizedDescription)
+                    if !self.savedOutputPaths.isEmpty {
+                        self.appendLog("Some outputs were saved before the save error; see the paths above.")
+                    }
                 }
             })
         } catch {
@@ -347,6 +378,8 @@ final class StarNetProcessor: ObservableObject {
     }
 
     func showInFinder(url: URL?) {
-        if let url { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        if let url {
+            NSWorkspace.shared.activateFileViewerSelecting(url == outputPath && !savedOutputPaths.isEmpty ? savedOutputPaths : [url])
+        }
     }
 }

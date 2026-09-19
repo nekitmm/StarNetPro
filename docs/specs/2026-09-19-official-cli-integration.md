@@ -1,7 +1,8 @@
 # Official CLI integration
 
 Replace the bundled Torch engine with a separately installed official StarNet2
-CLI, targeting 2.6.2-0241. Keep TIFF/PNG/JPEG and starless/stars-only controls.
+CLI, targeting 2.6.2-0241. Keep TIFF/PNG/JPEG input, save starless images and expose
+the CLI's optional Difference and Unscreen star outputs.
 
 - Discover/probe an installed CLI using machine-info; no weight/runtime overrides.
 - Consume buffered machine-progress/diagnostic JSONL; successful process exit and
@@ -17,7 +18,7 @@ CLI, targeting 2.6.2-0241. Keep TIFF/PNG/JPEG and starless/stars-only controls.
   content hash. Do not bundle engine files or introduce a source-code license.
 - Test contracts and native Mac processing; document all untested UAT separately.
 
-No FITS preview, new processing options, CLI release, or public GUI release.
+No FITS preview, other new processing options, CLI release, or public GUI release.
 
 ## Simplified first-run screen
 
@@ -38,3 +39,21 @@ license content per app session. Closing it leaves a dedicated Review License
 screen, not an invitation to reinstall. Repeated activation/probes must not reopen
 a dismissed sheet. Acceptance opens the workspace and persists across launches;
 changed terms require acceptance again. Never infer consent from installation.
+
+## Sidebar and optional star outputs
+
+- Sidebar header shows only the installed semantic version. Location, backend,
+  build details, license, update/discovery controls and support links move into
+  a collapsed Advanced section below processing settings.
+- Always save and preview the starless image. Replace Stars Only with independent
+  Difference and Unscreen checkboxes, both initially off. Both may be selected.
+  Pass --mask and --unscreen directly to the CLI in the same inference run.
+- Saving starless.tiff also saves starless_difference.tiff and/or
+  starless_unscreen.tiff beside it. Confirm existing companion replacements;
+  reject aliases/duplicate destinations or source overwrite. Validate every
+  requested generated image before publishing any. Report individual saved paths
+  and any save failure accurately; multiple filesystem writes are not atomic as
+  a group. Never publish failed or cancelled inference outputs.
+- Prove flag mapping with tests, exercise all four output combinations and missing
+  companion cases, then compare all three outputs byte-for-byte against a direct
+  official CLI run on the real SHO fixture. No GUI-side star arithmetic.

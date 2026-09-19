@@ -49,7 +49,7 @@ struct CLIInfo: Decodable {
         guard try releaseVersion >= CLIContract.minimumVersion else {
             throw CLIError.message("StarNet2 \(CLIContract.minimumVersionText) or newer is required. Install the current official CLI.")
         }
-        for flag in ["--input", "--output", "--stride", "--mask", "--machine-progress"] {
+        for flag in ["--input", "--output", "--stride", "--mask", "--unscreen", "--machine-progress"] {
             guard options.contains(where: { $0.flags.contains(flag) }) else {
                 throw CLIError.message("The selected CLI does not support \(flag).")
             }
@@ -82,14 +82,27 @@ enum CLIContract {
             .filter { seen.insert($0.path).inserted }
     }
 
-    static func arguments(input: URL, output: URL, stars: URL?, stride: Int) throws -> [String] {
+    static func arguments(input: URL, output: URL, stars: URL?, unscreen: URL? = nil, stride: Int) throws -> [String] {
         guard stride >= 2, stride <= 512, stride.isMultiple(of: 2) else {
             throw CLIError.message("Stride must be an even integer from 2 through 512.")
         }
         var args = ["--input", input.path, "--output", output.path,
                     "--stride", String(stride), "--machine-progress"]
         if let stars { args += ["--mask", stars.path] }
+        if let unscreen { args += ["--unscreen", unscreen.path] }
         return args
+    }
+
+    static func companionURL(_ starless: URL, suffix: String) -> URL {
+        starless.deletingLastPathComponent().appendingPathComponent(
+            starless.deletingPathExtension().lastPathComponent + "_\(suffix).tiff")
+    }
+
+    static func validateDestinations(input: URL, outputs: [URL]) throws {
+        let paths = ([input] + outputs).map { $0.resolvingSymlinksInPath().standardizedFileURL.path }
+        guard Set(paths).count == paths.count else {
+            throw CLIError.message("Output files must be distinct and must not overwrite the input image.")
+        }
     }
 
     static func licenseURL(executable: URL) -> URL? {

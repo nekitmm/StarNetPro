@@ -20,7 +20,7 @@ final class CLIIntegrationTests: XCTestCase {
     }
 
     private func machineInfo(version: String = "2.6.2", product: String = "starnet2", progress: Bool = true) -> String {
-        let flags = ["--input", "--output", "--stride", "--mask"] + (progress ? ["--machine-progress"] : [])
+        let flags = ["--input", "--output", "--stride", "--mask", "--unscreen"] + (progress ? ["--machine-progress"] : [])
         let options = flags.map { "{\"name\":\"\($0.dropFirst(2))\",\"flags\":[\"\($0)\"]}" }.joined(separator: ",")
         return """
         {"schema":"starnetastro.cli.machine-info.v1","product":"\(product)","version":"\(version)","build":"0241","backend":{"display_name":"CoreML"},"options":[\(options)]}
@@ -95,6 +95,23 @@ final class CLIIntegrationTests: XCTestCase {
         XCTAssertEqual(Array(stars.suffix(2)), ["--mask", out.path])
         for stride in [0, 1, 3, 513, 1024] {
             XCTAssertThrowsError(try CLIContract.arguments(input: input, output: out, stars: nil, stride: stride))
+        }
+    }
+
+    func testIndependentStarLayerArguments() throws {
+        let input = URL(fileURLWithPath: "/tmp/source (RGB).tif")
+        let output = URL(fileURLWithPath: "/tmp/starless.tiff")
+        let difference = URL(fileURLWithPath: "/tmp/difference stars.tiff")
+        let unscreen = URL(fileURLWithPath: "/tmp/unscreen stars.tiff")
+        for mask in [nil, difference] as [URL?] {
+            for screen in [nil, unscreen] as [URL?] {
+                let args = try CLIContract.arguments(input: input, output: output,
+                                                     stars: mask, unscreen: screen, stride: 256)
+                XCTAssertEqual(args.contains("--mask"), mask != nil)
+                XCTAssertEqual(args.contains("--unscreen"), screen != nil)
+                if let index = args.firstIndex(of: "--mask") { XCTAssertEqual(args[index + 1], difference.path) }
+                if let index = args.firstIndex(of: "--unscreen") { XCTAssertEqual(args[index + 1], unscreen.path) }
+            }
         }
     }
 
@@ -328,20 +345,63 @@ final class CLIIntegrationTests: XCTestCase {
         let input = try fixture(root)
         let exe = try executable("""
         while [ "$#" -gt 0 ]; do
-          case "$1" in --input) input="$2"; shift 2;; --output) output="$2"; shift 2;; --mask) stars="$2"; shift 2;; *) shift;; esac
+          case "$1" in --input) input="$2"; shift 2;; --output) output="$2"; shift 2;; --mask) stars="$2"; shift 2;; --unscreen) unscreen="$2"; shift 2;; *) shift;; esac
         done
         printf '%s\\n' '{"schema":"starnetastro.cli.progress.v1","event":"progress","percent":50,"current":1,"total":2}' >&2
         cp "$input" "$output"
         if [ -n "$stars" ]; then cp "$input" "$stars"; fi
+        if [ -n "$unscreen" ]; then cp "$input" "$unscreen"; fi
         """)
-        for starsOnly in [false, true] {
-            let destination = root.appendingPathComponent(starsOnly ? "stars.tiff" : "starless.tiff")
+        for (wantDifference, wantUnscreen) in [(false, false), (true, false), (false, true), (true, true)] {
+            let destination = root.appendingPathComponent("starless-\(wantDifference)-\(wantUnscreen).tiff")
+            let difference = wantDifference ? CLIContract.companionURL(destination, suffix: "difference") : nil
+            let unscreen = wantUnscreen ? CLIContract.companionURL(destination, suffix: "unscreen") : nil
             let processor = StarNetProcessor(defaults: defaults(), discover: false)
-            processor.startProcessing(executable: exe, input: input, destination: destination, starsOnly: starsOnly, stride: 256)
+            processor.startProcessing(executable: exe, input: input, destination: destination,
+                                      difference: difference, unscreen: unscreen, stride: 256)
             try await waitForProcessing(processor)
-            XCTAssertEqual(try Data(contentsOf: destination), try Data(contentsOf: input))
+            let outputs = [destination, difference, unscreen].compactMap { $0 }
+            for output in outputs { XCTAssertEqual(try Data(contentsOf: output), try Data(contentsOf: input)) }
+            XCTAssertEqual(processor.savedOutputPaths, outputs)
+            XCTAssertEqual(processor.outputPath, destination)
             XCTAssertEqual(processor.progressLabel, "Complete.")
         }
+    }
+
+    func testMissingCompanionDoesNotOverwriteAnyDestination() async throws {
+        let root = try temporaryDirectory()
+        let input = try fixture(root)
+        let destination = root.appendingPathComponent("starless.tiff")
+        let difference = CLIContract.companionURL(destination, suffix: "difference")
+        let unscreen = CLIContract.companionURL(destination, suffix: "unscreen")
+        let existing = Data("existing user output".utf8)
+        for file in [destination, difference, unscreen] { try existing.write(to: file) }
+        let exe = try executable("""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in --input) input="$2"; shift 2;; --output) output="$2"; shift 2;; --mask) stars="$2"; shift 2;; *) shift;; esac
+        done
+        cp "$input" "$output"
+        cp "$input" "$stars"
+        """)
+        let processor = StarNetProcessor(defaults: defaults(), discover: false)
+        processor.startProcessing(executable: exe, input: input, destination: destination,
+                                  difference: difference, unscreen: unscreen, stride: 256)
+        try await waitForProcessing(processor)
+        XCTAssertEqual(processor.progressLabel, "Processing failed.")
+        XCTAssertTrue(processor.savedOutputPaths.isEmpty)
+        for file in [destination, difference, unscreen] { XCTAssertEqual(try Data(contentsOf: file), existing) }
+    }
+
+    func testCompanionNamesAndDestinationCollisions() throws {
+        let root = try temporaryDirectory()
+        let input = try fixture(root)
+        let main = root.appendingPathComponent("starless.source.tiff")
+        XCTAssertEqual(CLIContract.companionURL(main, suffix: "unscreen").lastPathComponent, "starless.source_unscreen.tiff")
+        XCTAssertThrowsError(try CLIContract.validateDestinations(input: input, outputs: [main, main]))
+        XCTAssertThrowsError(try CLIContract.validateDestinations(input: input, outputs: [main, input]))
+        let alias = root.appendingPathComponent("alias.tiff")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: input)
+        XCTAssertThrowsError(try CLIContract.validateDestinations(input: input, outputs: [main, alias]))
     }
 
     func testInferenceFinishDoesNotPublishFailedJob() async throws {
@@ -352,7 +412,7 @@ final class CLIIntegrationTests: XCTestCase {
         try original.write(to: destination)
         let exe = try executable("printf '%s\\n' '{\"schema\":\"starnetastro.cli.progress.v1\",\"event\":\"finish\",\"percent\":100}' >&2; exit 1")
         let processor = StarNetProcessor(defaults: defaults(), discover: false)
-        processor.startProcessing(executable: exe, input: input, destination: destination, starsOnly: false, stride: 256)
+        processor.startProcessing(executable: exe, input: input, destination: destination, stride: 256)
         try await waitForProcessing(processor)
         XCTAssertEqual(try Data(contentsOf: destination), original)
         XCTAssertEqual(processor.progressLabel, "Processing failed.")
@@ -365,11 +425,16 @@ final class CLIIntegrationTests: XCTestCase {
         let destination = root.appendingPathComponent("result.tiff")
         let exe = try executable("exec /bin/sleep 30")
         let processor = StarNetProcessor(defaults: defaults(), discover: false)
-        processor.startProcessing(executable: exe, input: input, destination: destination, starsOnly: false, stride: 256)
+        processor.startProcessing(executable: exe, input: input, destination: destination,
+                                  difference: root.appendingPathComponent("difference.tiff"),
+                                  unscreen: root.appendingPathComponent("unscreen.tiff"), stride: 256)
         try await Task.sleep(for: .milliseconds(100))
         processor.cancelProcessing()
         try await waitForProcessing(processor)
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertTrue(processor.savedOutputPaths.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("difference.tiff").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("unscreen.tiff").path))
         XCTAssertEqual(processor.progressLabel, "Cancelled.")
     }
 
@@ -379,11 +444,11 @@ final class CLIIntegrationTests: XCTestCase {
         let original = try Data(contentsOf: input)
         let processor = StarNetProcessor(defaults: defaults(), discover: false)
         processor.startProcessing(executable: URL(fileURLWithPath: "/usr/bin/true"), input: input,
-                                  destination: input, starsOnly: false, stride: 256)
+                                  destination: input, stride: 256)
         XCTAssertFalse(processor.isProcessing)
         XCTAssertEqual(try Data(contentsOf: input), original)
         processor.startProcessing(executable: URL(fileURLWithPath: "/usr/bin/true"), input: input,
-                                  destination: root.appendingPathComponent("missing.tiff"), starsOnly: false, stride: 256)
+                                  destination: root.appendingPathComponent("missing.tiff"), stride: 256)
         try await waitForProcessing(processor)
         XCTAssertEqual(processor.progressLabel, "Processing failed.")
     }

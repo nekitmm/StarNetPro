@@ -19,9 +19,17 @@ created by Sunny Ma. This is not an official StarNet product.
    leaves a **Review License…** button, not the download screen. An already
    compatible CLI skips installation; previously accepted terms skip this step
    too. Changed license contents require renewed acceptance.
-5. Open a TIFF, PNG or JPEG, choose the stride and output mode, and process it.
-   **Stars Only** saves the CLI's subtractive star mask instead of its starless
-   output. Output is saved as TIFF.
+5. Open a TIFF, PNG or JPEG, choose the stride and optional star layers, and process
+   it. The starless image is always saved and previewed. **Difference** saves stars
+   for Add/Linear Dodge blending; **Unscreen** saves stars for Screen blending.
+   Select either, both, or neither. These are separate TIFF files, not embedded layers.
+   Saving `starless.tiff` also saves `starless_difference.tiff` and/or
+   `starless_unscreen.tiff` beside it. Existing companion files require confirmation
+   before replacement. All outputs come directly from one CLI run.
+
+Only the installed version appears at the top of the sidebar. Expand **Advanced**
+below the processing settings for license, location, backend/build, updates and
+support controls.
 
 For a portable installation, use **StarNet2 CLI → Choose Executable…** in the
 menu bar to select its `starnet2` executable without cluttering the start screen.
@@ -53,6 +61,9 @@ models, or configure library paths.
   a successful process exit and a readable output; errors/warnings stay in the log.
 - Cancel stops the CLI and does not publish a partial result. Existing destination
   files are replaced only after a successful run.
+  All requested outputs are checked before saving. If saving fails partway
+  through (for example, a disk fills up), the log identifies any files already
+  saved; separate output files cannot be replaced atomically as a group.
 
 ## CLI updates and privacy
 
@@ -97,7 +108,7 @@ xcrun swiftc -parse-as-library StarNetPro/Models/*.swift \
 build/qa/verify-installer
 ```
 
-The first compares the GUI processing path's starless and stars-only saved files
+The first compares the GUI processing path's starless, Difference and Unscreen files
 byte-for-byte with direct CLI results and observes live progress. Use a new output
 directory. The second downloads and verifies the official installer, but never
 opens or installs it. Neither test establishes manual GUI/Installer usability.

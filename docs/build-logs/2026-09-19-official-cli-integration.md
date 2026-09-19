@@ -155,3 +155,40 @@
   Visual UAT remains for the user. No public packaging/release was performed.
 - Separately explained the standard Mac close-window versus quit behavior; no
   last-window termination change requested or implemented.
+
+## Sidebar simplification and optional star outputs
+
+- User confirmed r5 setup works. Requested version-only sidebar header, lower
+  collapsed technical controls and Difference/Unscreen star outputs. The header
+  now shows 2.6.2 only. Advanced below processing settings contains location,
+  backend/build, license, discovery/update and support controls; collapsed initially.
+- Chose starless plus independent optional Difference/Unscreen TIFFs (both initially
+  off), replacing Stars Only. This was stated during implementation with a choice
+  offered to the user; visual UAT of the new layout is pending.
+- Verified /usr/local/bin/starnet2 --machine-info from the actual installed
+  2.6.2-0241 CoreML CLI: both --mask and --unscreen are advertised. Added required
+  capability validation and direct argument mapping; no GUI star arithmetic.
+- One inference produces all requested outputs. Companion names use _difference
+  and _unscreen suffixes beside the selected starless TIFF. Preview remains starless;
+  Show Saved Results selects the full output set in Finder. Existing companion
+  replacements require confirmation. All generated images are validated before
+  touching destinations; input/duplicate/symlink path collisions are rejected.
+  Failed/cancelled inference publishes nothing. Independent filesystem writes are
+  not a group transaction; a later save failure clearly lists files already saved.
+- All 25 native tests passed, including four output combinations, argument routing,
+  companion naming, destination collisions, missing companion preservation and
+  multi-output cancellation. Native Release build and strict codesign check passed;
+  the previously noted Xcode 27 exit-code-zero diagnostic remains. No pre-commit
+  configuration exists; git diff --check and shell syntax checks passed.
+- Extended scripts/verify-real-cli.swift to compare independent literal direct CLI
+  arguments against the production GUI model in one three-output run. Ran:
+  xcrun swiftc -parse-as-library StarNetPro/Models/*.swift scripts/verify-real-cli.swift -o build/qa/verify-real-cli
+  build/qa/verify-real-cli /usr/local/bin/starnet2 build/qa/SHO.tif build/qa/real-output-r6
+  Actual 2048x2048 RGB16 SHO fixture outputs matched byte-for-byte, with live progress:
+  - Starless: 33419418 bytes, d1c1484262e3d20221d6c79aefb12318218fa1efd6196a4d4087fa4141eef09f.
+  - Difference: 5132322 bytes, 2cd191ce6f609bd0170b32193d7cd430633e7c9d85a48831326dcb02f821027a.
+  - Unscreen: 5444460 bytes, 2dd28f7b5b99c73b314021f6ebeb4e7b46665eb30e44d37e4ad9b87d49179cd7.
+- Revealed Downloads/StarNetPro-CLI-upgrade-r6/StarNetPro.app on the Mac.
+  Local test ZIP SHA-256:
+  a463ee3f4db694ffa6c3eb646e4cec281142e62794c0581a3407259883218abe.
+  No installed CLI, real preferences, public release or system configuration changed.
