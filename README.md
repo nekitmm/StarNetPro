@@ -1,7 +1,19 @@
 # StarNetPro
 
-An independent macOS GUI for the official StarNet2 command-line tool, originally
-created by Sunny Ma. This is not an official StarNet product.
+An independent macOS GUI for the official StarNet2 command-line tool.
+
+## Original project and this fork
+
+This fork continues the work of [leohgyang/StarNetPro](https://github.com/leohgyang/StarNetPro).
+The original source files credit **Sunny Ma** as their author; those credits are
+preserved. Credit for the original application belongs to its original authors.
+
+[nekitmm](https://github.com/nekitmm) maintains this fork, adding integration with
+the current official StarNet2 CLI, installation and update assistance, processing
+progress, linear-image support, and optional star-layer outputs. These changes
+have also been [offered upstream](https://github.com/leohgyang/StarNetPro/pull/1).
+This fork does not imply endorsement by the original authors or ownership of
+their work. StarNetPro remains separate from the official StarNet2 CLI.
 
 ## First run
 
@@ -127,11 +139,20 @@ Append `--linear` to the first verifier command to compare linear-mode outputs.
 
 ## Licensing and distribution
 
-The upstream source archive did not declare a source-code license. Original
-credits are preserved; this contribution does not assign a new license.
-The maintainer must settle source licensing before claiming open-source reuse rights.
+The upstream repository does not currently declare a source-code license; its
+README explicitly leaves that decision unresolved. This fork preserves existing
+author credits and does not assign a license to the original code or assets.
+Attribution and public source availability do not, by themselves, grant permission
+to reuse or redistribute that work.
 
-StarNet2 is separately licensed. Its terms are presented from the user's official
+Before publishing GUI binaries or redistributing this work outside GitHub's
+permitted hosting and forking, we need an explicit license or permission from the
+relevant rights holders covering the intended use. Any eventual distribution
+must preserve the notices and comply with the terms they require. Until this is
+resolved, do not treat this fork as a licensed open-source release.
+
+StarNet2 is separately licensed; its license does not license the GUI source or
+assets. Its terms are presented from the user's official
 CLI installation. No StarNet2 binaries, weights or runtime libraries are shipped
 with StarNetPro. See [THIRD_PARTY.md](THIRD_PARTY.md).
 
