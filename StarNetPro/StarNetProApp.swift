@@ -23,6 +23,7 @@ struct StarNetProApp: App {
                     processor.openImage()
                 }
                 .keyboardShortcut("o")
+                .disabled(!processor.workspaceAvailable || processor.busy)
 
                 Divider()
 
@@ -32,12 +33,19 @@ struct StarNetProApp: App {
                 .keyboardShortcut("q")
             }
 
+            CommandMenu("StarNet2 CLI") {
+                Button("Choose Executable…", action: processor.chooseCLI)
+                    .disabled(processor.busy)
+                Button("Use Automatic Location", action: processor.useAutomaticCLI)
+                    .disabled(processor.busy)
+            }
+
             CommandMenu("Process") {
                 Button("Remove Stars") {
                     processor.processImage()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                .disabled(processor.isProcessing || processor.inputImage == nil)
+                .disabled(!processor.canProcess)
 
                 Button("Cancel Processing") {
                     processor.cancelProcessing()

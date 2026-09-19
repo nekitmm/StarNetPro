@@ -8,4 +8,3 @@ dist/
 *.mobileprovision
 .env
 StarNetBin/*
-!StarNetBin/README.md

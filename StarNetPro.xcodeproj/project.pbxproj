@@ -6,9 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		BB4D97AA2E3B4B6500927129 /* StarNetBin in Resources */ = {isa = PBXBuildFile; fileRef = BB4D97A92E3B4B6500927129 /* StarNetBin */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		BBF137152E3A679900467C8E /* PBXContainerItemProxy */ = {
@@ -28,7 +25,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		BB4D97A92E3B4B6500927129 /* StarNetBin */ = {isa = PBXFileReference; lastKnownFileType = folder; path = StarNetBin; sourceTree = "<group>"; };
 		BBF137062E3A679800467C8E /* StarNetPro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StarNetPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BBF137142E3A679900467C8E /* StarNetProTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StarNetProTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BBF1371E2E3A679900467C8E /* StarNetProUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StarNetProUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,7 +76,6 @@
 		BBF136FD2E3A679800467C8E = {
 			isa = PBXGroup;
 			children = (
-				BB4D97A92E3B4B6500927129 /* StarNetBin */,
 				BBF137082E3A679800467C8E /* StarNetPro */,
 				BBF137172E3A679900467C8E /* StarNetProTests */,
 				BBF137212E3A679900467C8E /* StarNetProUITests */,
@@ -221,7 +216,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BB4D97AA2E3B4B6500927129 /* StarNetBin in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -416,14 +410,6 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/StarNetPro/Binaries/lib",
-					"$(PROJECT_DIR)/StarNetPro/StarNetBin/lib/lib",
-					"$(PROJECT_DIR)/StarNetBin/lib/lib",
-					"$(PROJECT_DIR)/StarNetBin/lib",
-					"$(PROJECT_DIR)/StarNetBIn/Lib/lib",
-				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "HFLS-Astronomy.StarNetPro";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -451,14 +437,6 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/StarNetPro/Binaries/lib",
-					"$(PROJECT_DIR)/StarNetPro/StarNetBin/lib/lib",
-					"$(PROJECT_DIR)/StarNetBin/lib/lib",
-					"$(PROJECT_DIR)/StarNetBin/lib",
-					"$(PROJECT_DIR)/StarNetBIn/Lib/lib",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "HFLS-Astronomy.StarNetPro";

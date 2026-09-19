@@ -1,61 +1,139 @@
 # StarNetPro
 
-A macOS application for removing stars from astrophotography images, built with SwiftUI and powered by an external StarNet2 engine. This is an independent project, not an official StarNet product.
+An independent macOS GUI for the official StarNet2 command-line tool, originally
+created by Sunny Ma. This is not an official StarNet product.
 
-The application interface, menus, notifications, and built-in log messages are in English.
+## First run
 
-## Features
+1. Open StarNetPro. It checks for StarNet2 in the official installer location
+   (`/usr/local/bin/starnet2`), then Homebrew/PATH locations.
+   A brief opening indicator is shown until this check completes; compatible,
+   previously accepted installations go straight to the workspace.
+2. If it is missing or incompatible, click **Download and Install…**.
+   **Skip** is always available on this screen: it opens the GUI for browsing
+   and image previews without installing anything. Processing still requires a
+   compatible CLI and accepted terms. Use **Set up StarNet2…** to return later;
+   skipping lasts for this app session.
+   The app fetches the latest release for your Mac from StarNetAstro, verifies
+   the installer's size and SHA-256, and asks macOS to assess its trust.
+   A spinner identifies the current download/verification stage; it does not
+   claim a transfer percentage.
+3. Apple Installer opens. Review the package and approve installation there.
+   StarNetPro never asks for your administrator password or installs silently.
+4. Return to StarNetPro; it rechecks the installation and opens the StarNet2
+   license automatically. Accept it to enter the workspace. Closing the dialog
+   leaves a **Review License…** button, not the download screen. An already
+   compatible CLI skips installation; previously accepted terms skip this step
+   too. Changed license contents require renewed acceptance.
+5. Open a TIFF, PNG or JPEG, choose the stride and optional star layers, and process
+   it. The starless image is always saved and previewed. **Difference** saves stars
+   for Add/Linear Dodge blending; **Unscreen** saves stars for Screen blending.
+   Select either, both, or neither. These are separate TIFF files, not embedded layers.
+   Saving `starless.tiff` also saves `starless_difference.tiff` and/or
+   `starless_unscreen.tiff` beside it. Existing companion files require confirmation
+   before replacement. All outputs come directly from one CLI run.
 
-- Open or drag and drop TIFF, PNG, and JPEG images.
-- Generate a starless image or a separate star image.
-- Adjust the processing stride and cancel processing.
-- Choose an output location and save the result as TIFF.
+Enable **Linear image** only for unstretched data (off by default). This passes
+`--linear` to StarNet2: the CLI automatically stretches for neural processing and
+then returns the result to linear data. Leave it off for already stretched images.
+The GUI does not perform its own stretching or change supported input formats.
 
-FITS input is not supported in this version. Convert FITS images to TIFF before importing them.
+Only the installed version appears at the top of the sidebar. Expand **Advanced**
+below the processing settings for license, location, backend/build, updates and
+support controls.
 
-## System requirements
+For a portable installation, use **StarNet2 CLI → Choose Executable…** in the
+menu bar to select its `starnet2` executable without cluttering the start screen.
+Keep the complete CLI archive together, including its model, libraries and
+`LICENSE.txt`. A custom selection takes precedence over automatic discovery.
+Use **StarNet2 CLI → Use Automatic Location** after installing system-wide if an old custom
+selection is still active.
 
-- Apple Silicon Mac (M-series chip); Intel Macs are not supported by the bundled test engine.
-- macOS 15.5 or later.
-- Xcode is required only when building from source.
+The CLI is downloaded directly from official sources, not bundled in this app.
+It locates its own model/runtime files. There is no need to copy weights, rename
+models, or configure library paths.
 
-## Download and use
+## Compatibility and progress
 
-GitHub's **Code → Download ZIP** downloads source code, not a runnable application. When a release is available, download the application ZIP from **Releases → Assets**, extract it, and move `StarNetPro.app` to Applications.
+- The app requires macOS 15.5 or later. The supplied build script targets Apple
+  Silicon; a native Intel GUI has not been qualified by this change.
+- StarNet2 CLI **2.6.2 or newer** with the supported machine-info and machine-progress
+  contracts is required. The old bundled 2.1.0 Torch engine is no longer supported.
+  The minimum stays at 2.6.2 when newer releases are published; update availability
+  is separate from compatibility.
+- Apple Silicon downloads select the CoreML CLI, including if a GUI is translated
+  by Rosetta. The release feed also defines the Intel/ORT package lane.
+- Processing passes the original file to the CLI; previews are not processing
+  inputs. The CLI determines supported image/sample formats and output depth.
+  This GUI does not add float-TIFF support or convert unsupported data silently.
+- FITS preview/import remains out of scope. Convert to a suitable TIFF upstream.
+- The progress bar reports actual **tile inference**, not total wall-clock work.
+  Preparation and final output writing are separate phases. Completion requires
+  a successful process exit and a readable output; errors/warnings stay in the log.
+- Cancel stops the CLI and does not publish a partial result. Existing destination
+  files are replaced only after a successful run.
+  All requested outputs are checked before saving. If saving fails partway
+  through (for example, a disk fills up), the log identifies any files already
+  saved; separate output files cannot be replaced atomically as a group.
 
-A public, Developer ID-signed and notarized release is not available yet. The maintainer's local test build includes third-party components whose redistribution terms still need to be verified. It uses ad-hoc signing and may be blocked by macOS when downloaded.
+## CLI updates and privacy
 
-To process an image, open or drop a supported file, choose the stride and output mode, and start processing. Select where to save the TIFF result. Enable star mode for a star image; leave it disabled for a starless image.
+The GUI and CLI have independent versions. StarNetPro checks the public
+[official release feed](https://starnetastro.com/cli-tools/latest.json) at launch;
+disable **Check on Launch** to opt out, or use **Check for CLI Updates** manually.
+Version and build numbers are compared numerically. Checks failing offline do not
+prevent use of an already installed compatible CLI.
 
-## Build from source
+Downloads and installation are always user-initiated. No background installer,
+automatic replacement, app self-update, account, image upload, or analytics is
+implemented. Update requests contact StarNetAstro over HTTPS; image processing is
+local. Logs include local paths, so review them before sharing.
 
-1. Install the full Xcode application. This version was built with Xcode 26.3.
-2. Follow `StarNetBin/README.md` to supply the compatible StarNet2 v2.1.0 ARM64 Torch runtime.
-3. Run:
+Verified installers are kept in a uniquely named macOS temporary directory while
+Apple Installer may need them. They are not application-bundled resources.
 
-   ```sh
-   ./scripts/build.sh
-   ```
+## Build and test
 
-Build artifacts are written to `dist/`. The script creates an ad-hoc-signed local test build; it does not perform Developer ID signing or notarization.
+Install full Xcode, then run:
 
-This repository does not include the engine, model weights, or dynamic libraries. The interface can compile without them, but image processing will not work. Do not assume that current StarNet releases are compatible with this older command-line interface or model format.
+```sh
+bash scripts/build.sh
+bash scripts/test.sh
+```
 
-## Data handling
+No CLI, weights, or third-party runtime is needed to compile or run the automated
+tests. The tests use temporary fake executables and fixture images. The build
+script creates `dist/StarNetPro.app` and an ad-hoc-signed local test ZIP under
+`dist/`; it does not produce a Developer ID-signed/notarized public release.
 
-The visible Swift source processes images locally through the engine. It does not implement accounts, advertising, analytics, or image uploads. This is not a complete privacy audit of the closed-source engine. Logs may contain local file paths; remove personal information before sharing them.
+For optional real-release checks on a Mac:
 
-## Validation and limitations
+```sh
+mkdir -p build/qa
+xcrun swiftc -parse-as-library StarNetPro/Models/*.swift \
+  scripts/verify-real-cli.swift -o build/qa/verify-real-cli
+build/qa/verify-real-cli /path/to/starnet2 /path/to/image.tif build/qa/new-results
 
-- The Release / arm64 build passed with Xcode 26.3.
-- The supplied engine processed a synthetic 512 × 512 image on the CPU and produced 16-bit TIFF starless and star outputs.
-- Local application signature integrity checks passed.
-- End-to-end GUI testing, real astrophotography images, large images, MPS/GPU execution, other Macs, and downloaded-file Gatekeeper behavior have not been fully tested.
-- The application has not been Developer ID-signed or notarized.
-- This version is being prepared for GitHub distribution and does not yet meet Mac App Store sandbox requirements.
+xcrun swiftc -parse-as-library StarNetPro/Models/*.swift \
+  scripts/verify-installer.swift -o build/qa/verify-installer
+build/qa/verify-installer
+```
 
-## License and third-party components
+The first compares the GUI processing path's starless, Difference and Unscreen files
+byte-for-byte with direct CLI results and observes live progress. Use a new output
+directory. The second downloads and verifies the official installer, but never
+opens or installs it. Neither test establishes manual GUI/Installer usability.
+Append `--linear` to the first verifier command to compare linear-mode outputs.
 
-The original source archive did not include a source-code license. Original author credits are preserved. No MIT or other license has been added without the maintainer's decision; the maintainer must confirm ownership and choose a license.
+## Licensing and distribution
 
-The StarNet engine, model, and libraries are separate third-party components. Any future license for this repository's source code does not automatically cover them. See `THIRD_PARTY.md`.
+The upstream source archive did not declare a source-code license. Original
+credits are preserved; this contribution does not assign a new license.
+The maintainer must settle source licensing before claiming open-source reuse rights.
+
+StarNet2 is separately licensed. Its terms are presented from the user's official
+CLI installation. No StarNet2 binaries, weights or runtime libraries are shipped
+with StarNetPro. See [THIRD_PARTY.md](THIRD_PARTY.md).
+
+A public signed/notarized StarNetPro release and Mac App Store distribution are
+not part of this change.

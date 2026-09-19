@@ -1,555 +1,402 @@
-//
-//  StarNetProcessor.swift
-//  StarNetPro
-//
-//  Created by Sunny Ma on 2025/7/30.
-//
-
+// Originally created by Sunny Ma on 2025/7/30.
 import Foundation
 import AppKit
 import Combine
 import UniformTypeIdentifiers
 
-class StarNetProcessor: ObservableObject {
-    // MARK: - 发布属性
-    @Published var log: String = ""
-    @Published var isProcessing: Bool = false
+@MainActor
+final class StarNetProcessor: ObservableObject {
+    @Published var log = ""
+    @Published var isProcessing = false
     @Published var inputImage: NSImage?
     @Published var outputImage: NSImage?
-    @Published var progress: Double = 0.0
+    @Published var progress: Double = 0
+    @Published var progressLabel = ""
+    @Published var strideValue = 256
+    @Published var linearImage = false
+    @Published var createDifference = false
+    @Published var createUnscreen = false
+    @Published var cliInfo: CLIInfo?
+    @Published var cliURL: URL?
+    @Published var setupMessage = "Checking for StarNet2…"
+    @Published var setupSummary = "Checking for StarNet2…"
+    @Published var isChecking = false
+    @Published private(set) var hasCompletedInitialCheck = false
+    @Published private(set) var setupSkipped = false
+    @Published var isDownloading = false
+    @Published var latestRelease: CLIRelease?
+    @Published var updateMessage = ""
+    @Published var licenseText = ""
+    @Published var licenseAccepted = false
+    @Published var showLicense = false
+    @Published var automaticallyCheckUpdates: Bool {
+        didSet { defaults.set(automaticallyCheckUpdates, forKey: "automaticallyCheckCLIUpdates") }
+    }
 
-    @Published var strideValue: Int = 256
-    @Published var maskmode: Bool = false
-
-    // MARK: - 内部属性
     var inputPath: URL?
     var outputPath: URL?
-    private var saveDestination: URL?
-    private var cancelled = false
-    private var process: Process?
-    private var outputPipe: Pipe?
-    private var errorPipe: Pipe?
+    var savedOutputPaths: [URL] = []
+    private var runner: CLIProcess?
+    private var decoder = JSONLines()
+    private var stdoutDecoder = JSONLines()
+    private var licenseHash = ""
+    private var promptedLicenseHash = ""
+    private let defaults: UserDefaults
+    private var isCancelling = false
+    private var checkingUpdates = false
+    private var runID = UUID()
 
-    // MARK: - 初始化
-    init() {
-        // 初始化时记录资源目录内容用于调试
-        logBundleContents()
+    var busy: Bool { isProcessing || isChecking || isDownloading }
+    var readyToProcess: Bool { cliInfo != nil && licenseAccepted }
+    var workspaceAvailable: Bool { setupSkipped || readyToProcess }
+    var needsLicenseAcceptance: Bool { cliInfo != nil && !licenseAccepted }
+    var canReviewLicense: Bool { needsLicenseAcceptance && !busy }
+    var canProcess: Bool { !busy && readyToProcess && inputPath != nil }
+    var newerReleaseAvailable: Bool {
+        guard let latest = try? latestRelease?.releaseVersion else { return false }
+        guard let installed = try? cliInfo?.releaseVersion else { return true }
+        return latest > installed
     }
 
-    // MARK: - 公共方法
+    init(defaults: UserDefaults = .standard, discover: Bool = true) {
+        self.defaults = defaults
+        automaticallyCheckUpdates = defaults.object(forKey: "automaticallyCheckCLIUpdates") as? Bool ?? true
+        if discover {
+            Task {
+                await refreshCLI()
+                if automaticallyCheckUpdates { await checkUpdates() }
+            }
+        }
+    }
 
-    /// Open Image文件
-    func openImage() {
-        guard !isProcessing else { return }
+    func refreshCLI() async {
+        guard !busy else { return }
+        isChecking = true
+        defer {
+            isChecking = false
+            hasCompletedInitialCheck = true
+        }
+        var failures: [String] = []
+        var summary = "Install StarNet2 to get started."
+        let paths = CLIContract.candidates(custom: defaults.string(forKey: "cliPath"),
+                                           path: ProcessInfo.processInfo.environment["PATH"])
+        for url in paths where FileManager.default.isExecutableFile(atPath: url.path) {
+            do {
+                let result = try await CLIProcess.capture(url, ["--machine-info"])
+                guard result.status == 0, !result.cancelled else {
+                    throw CLIError.message("Unable to probe StarNet2. Install CLI \(CLIContract.minimumVersionText) or newer.")
+                }
+                let info = try JSONDecoder().decode(CLIInfo.self, from: result.stdout)
+                try info.validate()
+                guard let licenseURL = CLIContract.licenseURL(executable: url) else {
+                    throw CLIError.message("The installed StarNet2 license is missing. Reinstall the complete official CLI package.")
+                }
+                let license = try Data(contentsOf: licenseURL)
+                guard let text = String(data: license, encoding: .utf8), !text.isEmpty else {
+                    throw CLIError.message("The installed StarNet2 license could not be read.")
+                }
+                licenseText = text
+                licenseHash = CLIContract.digest(license)
+                licenseAccepted = defaults.string(forKey: "acceptedStarNetLicenseSHA256") == licenseHash
+                cliInfo = info
+                cliURL = url
+                setupMessage = info.label
+                setupSummary = "StarNet2 \(info.version) is installed."
+                if !licenseAccepted && promptedLicenseHash != licenseHash {
+                    promptedLicenseHash = licenseHash
+                    showLicense = true
+                }
+                return
+            } catch {
+                summary = "Update StarNet2 to continue."
+                var message = error.localizedDescription
+                if let version = try? await CLIProcess.capture(url, ["--version"]),
+                   version.status == 0, !version.cancelled,
+                   let legacy = CLIContract.legacyVersion(version.stdout),
+                   let parsed = try? CLIVersion(legacy), parsed < CLIContract.minimumVersion {
+                    message = "StarNet2 \(legacy) is installed but is not supported by this version of StarNetPro. Update to StarNet2 \(CLIContract.minimumVersionText) or newer."
+                    summary = "StarNet2 \(legacy) is too old. Install \(CLIContract.minimumVersionText) or newer."
+                }
+                failures.append("\(url.path): \(message)")
+            }
+        }
+        cliInfo = nil
+        cliURL = nil
+        licenseAccepted = false
+        licenseText = ""
+        licenseHash = ""
+        showLicense = false
+        setupSummary = summary
+        setupMessage = failures.isEmpty ? "Install the official StarNet2 CLI to start processing." :
+            "No compatible StarNet2 installation found.\n" + failures.joined(separator: "\n")
+    }
+
+    func chooseCLI() {
+        guard !busy else { return }
         let panel = NSOpenPanel()
+        panel.message = "Select the starnet2 executable from a complete official CLI installation."
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            defaults.set(url.path, forKey: "cliPath")
+            Task { await refreshCLI() }
+        }
+    }
 
-        // 使用自定义的天文图像类型
+    func useAutomaticCLI() {
+        guard !busy else { return }
+        defaults.removeObject(forKey: "cliPath")
+        Task { await refreshCLI() }
+    }
+
+    func acceptLicense() {
+        guard cliInfo != nil, !busy, !licenseHash.isEmpty else { return }
+        defaults.set(licenseHash, forKey: "acceptedStarNetLicenseSHA256")
+        licenseAccepted = true
+        showLicense = false
+    }
+
+    func checkUpdates() async {
+        guard !checkingUpdates, !isDownloading else { return }
+        checkingUpdates = true
+        updateMessage = "Checking for CLI updates…"
+        defer { checkingUpdates = false }
+        do {
+            let release = try await InstallerService().latest(platform: CLIContract.nativePlatform)
+            guard !isDownloading else { return }
+            latestRelease = release
+            if let release = latestRelease {
+                updateMessage = newerReleaseAvailable ? "StarNet2 \(release.label) is available." :
+                    "Your installed StarNet2 is up to date."
+            }
+        } catch {
+            guard !isDownloading else { return }
+            latestRelease = nil
+            appendLog("Update check failed: \(error.localizedDescription)")
+            updateMessage = "Could not check for updates. Try again or download manually."
+        }
+    }
+
+    func downloadAndInstall() async {
+        guard !busy else { return }
+        isDownloading = true
+        defer { isDownloading = false }
+        updateMessage = "Finding the latest installer…"
+        do {
+            let release = try await InstallerService().latest(platform: CLIContract.nativePlatform)
+            latestRelease = release
+            guard let package = release.packages["installer"] else {
+                throw CLIError.message("The official feed has no Mac installer.")
+            }
+            let installer = try await InstallerService { [weak self] phase in
+                self?.updateMessage = phase.rawValue
+            }.download(package)
+            updateMessage = "Opening Apple Installer…"
+            guard NSWorkspace.shared.open(installer) else {
+                throw CLIError.message("Could not open Apple Installer. Download the CLI from the official website.")
+            }
+            updateMessage = "Complete Apple Installer, then return here."
+        } catch {
+            appendLog("Installer setup failed: \(error.localizedDescription)")
+            updateMessage = "Could not prepare the installer. Try again or download manually."
+        }
+    }
+
+    func becameActive() {
+        // Also covers installations started through the manual download link.
+        if !busy { Task { await refreshCLI() } }
+    }
+
+    func skipSetup() {
+        // Browsing the GUI does not require an installed engine or accepted terms.
+        setupSkipped = true
+    }
+
+    func reopenSetup() {
+        setupSkipped = false
+    }
+
+    func reviewLicense() {
+        guard canReviewLicense else { return }
+        showLicense = true
+    }
+
+    func openImage() {
+        guard workspaceAvailable, !busy else { return }
+        let panel = NSOpenPanel()
         panel.allowedContentTypes = [.tiff, .png, .jpeg]
         panel.allowsMultipleSelection = false
-
-        if panel.runModal() == .OK, let url = panel.url {
-            // 检查文件扩展名
-            let fileExtension = url.pathExtension.lowercased()
-
-            // 处理 FITS 文件
-            if fileExtension == "fits" || fileExtension == "fit" {
-                handleFITSFile(at: url)
-            } else {
-                loadImage(at: url)
-            }
-        }
+        if panel.runModal() == .OK, let url = panel.url { loadImage(at: url) }
     }
 
-    /// 处理 FITS 文件
-    private func handleFITSFile(at url: URL) {
-        log += "FITS file detected: \(url.lastPathComponent)\n"
-
-        // 创建临时 TIFF 文件路径
-        let tempDir = FileManager.default.temporaryDirectory
-        let tiffFile = tempDir.appendingPathComponent("\(UUID().uuidString).tiff")
-
-        // 使用 StarNet++ 转换 FITS 到 TIFF
-        guard let executablePath = findStarNetExecutable() else {
-            log += "Error: StarNet executable not found\n"
+    func loadImage(at url: URL) {
+        guard workspaceAvailable, !busy else { return }
+        guard ["tif", "tiff", "png", "jpg", "jpeg"].contains(url.pathExtension.lowercased()),
+              let image = NSImage(contentsOf: url) else {
+            appendLog("Choose a TIFF, PNG or JPEG image. FITS preview is not supported.")
             return
         }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = [url.path, tiffFile.path, "--convert-only"]
-        process.environment = setupEnvironment()
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        log += "Converting FITS to TIFF...\n"
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            if process.terminationStatus == 0 {
-                log += "Conversion succeeded\n"
-                loadImage(at: tiffFile)
-
-                // 设置输入路径为原始 FITS 文件
-                inputPath = url
-
-                // 自动设置输出路径
-                let outputDir = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
-                let outputFile = "starless_" + url.lastPathComponent
-                outputPath = outputDir.appendingPathComponent(outputFile)
-            } else {
-                let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                if let output = String(data: data, encoding: .utf8) {
-                    log += "Conversion failed: \(output)\n"
-                }
-            }
-        } catch {
-
-        }
+        inputPath = url
+        inputImage = image
+        outputPath = nil
+        savedOutputPaths = []
+        outputImage = nil
+        appendLog("Image loaded: \(url.path)")
     }
 
-    /// Start Processing图像
     func processImage() {
-        guard !isProcessing else { return }
-        // 验证输入
-        guard let inputPath = inputPath else {
-            log += "Error: No input image selected\n"
-            return
+        guard canProcess else { return }
+        Task {
+            // A CLI update may have replaced the binary or its terms since app launch.
+            await refreshCLI()
+            guard canProcess, let input = inputPath, let executable = cliURL else { return }
+            chooseDestination(executable: executable, input: input)
         }
+    }
 
-        // 验证可执行文件
-        guard let executablePath = findStarNetExecutable() else {
-            log += "Error: StarNet executable not found\n"
-            return
-        }
-        //验证模型文件
-        guard let modelPath = findModelPath() else {
-            log += "Error: Model weights not found\n"
-            return
-        }
-
+    private func chooseDestination(executable: URL, input: URL) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.tiff]
-        panel.nameFieldStringValue = (maskmode ? "stars_" : "starless_") + inputPath.deletingPathExtension().lastPathComponent + ".tiff"
+        panel.nameFieldStringValue = "starless_" + input.deletingPathExtension().lastPathComponent + ".tiff"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        guard destination.standardizedFileURL != inputPath.standardizedFileURL else {
-            log += "The output must not overwrite the input file.\n"
+        guard destination.resolvingSymlinksInPath().standardizedFileURL != input.resolvingSymlinksInPath().standardizedFileURL else {
+            appendLog("The output must not overwrite the input file.")
             return
         }
-        let outputPath = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tiff")
-        self.outputPath = outputPath
-        self.saveDestination = destination
-        self.cancelled = false
-        self.outputImage = nil
-        self.isProcessing = true
-        DispatchQueue.global(qos: .userInitiated).async {
-            DispatchQueue.main.async {
-                self.isProcessing = true
-                self.progress = 0.0
-                self.log = "Start Processing: \(inputPath.lastPathComponent)\n"
-                self.log += "StarNet executable: \(executablePath)\n"
-            }
-
-            self.runStarNetProcess(
-                executablePath: executablePath,
-                inputPath: inputPath.path,
-                outputPath: outputPath.path,
-                modelPath: modelPath
-            )
+        let difference = createDifference ? CLIContract.companionURL(destination, suffix: "difference") : nil
+        let unscreen = createUnscreen ? CLIContract.companionURL(destination, suffix: "unscreen") : nil
+        let existing = [difference, unscreen].compactMap { $0 }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        if !existing.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Replace existing star outputs?"
+            alert.informativeText = existing.map(\.path).joined(separator: "\n")
+            alert.addButton(withTitle: "Replace")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
+        startProcessing(executable: executable, input: input, destination: destination,
+                        difference: difference, unscreen: unscreen, stride: strideValue, linear: linearImage)
     }
 
-    /// Cancel Processing
-    func cancelProcessing() {
-        cancelled = true
-        process?.terminate()
-        // 保持忙碌状态直到进程Quit，防止交叉覆盖。
-        progress = 0.0
-        log += "\nCancellation requested\n"
-    }
-
-    /// Show in Finder文件
-    func showInFinder(url: URL?) {
-        guard let url = url else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    // MARK: - 私有方法
-
-    /// 加载图像
-    func loadImage(at url: URL) {
+    /// UI and integration tests use the same runner; original image files are passed unchanged.
+    func startProcessing(executable: URL, input: URL, destination: URL,
+                         difference: URL? = nil, unscreen: URL? = nil, stride: Int, linear: Bool = false) {
         guard !isProcessing else { return }
-        guard ["tif", "tiff", "png", "jpg", "jpeg"].contains(url.pathExtension.lowercased()),
-              NSImage(contentsOf: url) != nil else {
-            log += "Please choose a TIFF, PNG, or JPEG image. FITS is not supported in this version.\n"
+        let destinations = [destination, difference, unscreen].compactMap { $0 }
+        do {
+            try CLIContract.validateDestinations(input: input, outputs: destinations)
+        } catch {
+            appendLog(error.localizedDescription)
             return
         }
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("StarNetPro-run-" + UUID().uuidString)
         do {
-            // 检查文件大小
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            if let fileSize = attributes[.size] as? Int64, fileSize > 200 * 1024 * 1024 { // 200MB
-                log += "Warning: Large file (\(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))\n"
-            }
-
-            // 加载图像
-            inputImage = NSImage(contentsOf: url)
-            inputPath = url
-
-            // 自动设置输出路径
-            let outputDir = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first!
-            let outputFile = "starless_" + url.lastPathComponent
-            outputPath = outputDir.appendingPathComponent(outputFile)
-
-            // 重置输出图像
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: false)
+            let starless = scratch.appendingPathComponent("starless.tiff")
+            let stars = difference.map { _ in scratch.appendingPathComponent("difference.tiff") }
+            let screened = unscreen.map { _ in scratch.appendingPathComponent("unscreen.tiff") }
+            let generated = [starless, stars, screened].compactMap { $0 }
+            let args = try CLIContract.arguments(input: input, output: starless, stars: stars,
+                                                unscreen: screened, stride: stride, linear: linear)
+            runID = UUID()
+            let id = runID
+            isProcessing = true
+            isCancelling = false
+            progress = 0
+            progressLabel = "Preparing image and model…"
+            decoder = JSONLines()
+            stdoutDecoder = JSONLines()
             outputImage = nil
-
-            log += "Image loaded: \(url.lastPathComponent)\n"
-            log += "Suggested output name: \(outputPath!.lastPathComponent)\n"
-
-        } catch {
-            log += "Error loading image: \(error.localizedDescription)\n"
-        }
-    }
-
-    /// 查找 StarNet++ 可执行文件
-    private func findStarNetExecutable() -> String? {
-        // 1. 检查嵌入的版本
-        if let embeddedPath = Bundle.main.path(forResource: "starnet2", ofType: nil, inDirectory: "StarNetBin/bin") {
-            if isExecutableValid(embeddedPath) {
-                return embeddedPath
-            }
-        }
-
-        // 2. 备选路径：直接检查资源目录
-        if let resourcePath = Bundle.main.resourcePath {
-            let binPath = "\(resourcePath)/StarNetBin/starnet2"
-            if isExecutableValid(binPath) {
-                return binPath
-            }
-        }
-
-        // 3. 检查常见系统路径
-        let systemPaths = [
-            "/usr/local/bin/starnet2",
-            "/opt/homebrew/bin/starnet2",
-            "/usr/bin/starnet2"
-        ]
-
-        for path in systemPaths {
-            if isExecutableValid(path) {
-                return path
-            }
-        }
-
-        // 4. 使用 which 命令查找
-        if let path = runWhichCommand() {
-            if isExecutableValid(path) {
-                return path
-            }
-        }
-
-        return nil
-    }
-
-    private func findModelPath() -> String? {
-        if let resourcePath = Bundle.main.resourcePath {
-            let modelPath = "\(resourcePath)/StarNetBin/StarNet2_weights.pt"
-            if FileManager.default.isReadableFile(atPath: modelPath) {
-                return modelPath
-            }
-        }
-        return nil
-    }
-
-    /// 运行 which 命令查找可执行文件
-    private func runWhichCommand() -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = ["starnet2"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe() // 忽略错误输出
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !path.isEmpty {
-                return path
-            }
-        } catch {
-            log += "Executable lookup failed: \(error.localizedDescription)\n"
-        }
-
-        return nil
-    }
-
-    /// 设置环境变量
-    private func setupEnvironment() -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
-
-        // 设置 DYLD_LIBRARY_PATH 指向我们的 lib 目录
-        if let libPath = Bundle.main.path(forResource: nil, ofType: nil, inDirectory: "StarNetBin/lib") {
-            environment["DYLD_LIBRARY_PATH"] = libPath
-            log += "DYLD_LIBRARY_PATH: \(libPath)\n"
-        } else if let resourcePath = Bundle.main.resourcePath {
-            let libPath = "\(resourcePath)/StarNetBin/lib"
-            environment["DYLD_LIBRARY_PATH"] = libPath
-            log += "DYLD_LIBRARY_PATH: \(libPath)\n"
-        }
-
-        return environment
-    }
-
-    /// 运行 StarNet++ 进程
-    private func runStarNetProcess(executablePath: String, inputPath: String, outputPath: String, modelPath:String) {
-        let process = Process()
-        self.process = process
-        process.executableURL = URL(fileURLWithPath: executablePath)
-
-        var arguments = [
-            "-i",
-            inputPath,
-            "-o",
-            self.maskmode ? outputPath + ".starless.tiff" : outputPath,
-            "-s",
-            "\(self.strideValue)",
-            "-w",
-            modelPath
-        ]
-
-        arguments.append("-m")
-        arguments.append(self.maskmode ? outputPath : outputPath + ".mask.tiff")
-
-
-        process.arguments = arguments
-
-        // 设置环境变量
-        process.environment = setupEnvironment()
-
-        // 设置输出管道
-        outputPipe = Pipe()
-        errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        // 处理标准输出
-        outputPipe?.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            if let output = String(data: data, encoding: .utf8) {
-                DispatchQueue.main.async {
-                    self?.log += output
-                    // 简单的进度模拟
-                    if output.contains("Processing") {
-                        self?.progress = min((self?.progress ?? 0) + 0.05, 0.95)
-                    }
-                }
-            }
-        }
-
-        // 处理错误输出
-        errorPipe?.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            if let errorOutput = String(data: data, encoding: .utf8) {
-                DispatchQueue.main.async {
-                    self?.log += errorOutput
-                }
-            }
-        }
-
-        process.terminationHandler = { [weak self] finished in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-
-                self.isProcessing = false
-                self.progress = 1.0
-
-                // 清理管道
-                self.outputPipe?.fileHandleForReading.readabilityHandler = nil
-                self.errorPipe?.fileHandleForReading.readabilityHandler = nil
-
-                // 读取任何剩余的管道数据
-                if let outputData = try? self.outputPipe?.fileHandleForReading.readToEnd(),
-                   let output = String(data: outputData, encoding: .utf8) {
-                    self.log += output
-                }
-
-                if let errorData = try? self.errorPipe?.fileHandleForReading.readToEnd(),
-                   let errorOutput = String(data: errorData, encoding: .utf8) {
-
-                }
-
-                self.outputPipe = nil
-                self.errorPipe = nil
-
-                defer {
-                    try? FileManager.default.removeItem(atPath: outputPath)
-                    try? FileManager.default.removeItem(atPath: outputPath + ".starless.tiff")
-                    try? FileManager.default.removeItem(atPath: outputPath + ".mask.tiff")
-                }
-                guard !self.cancelled, finished.terminationStatus == 0 else {
-                    self.progress = 0
-                    self.log += "\nProcessing did not complete. Exit code: \(finished.terminationStatus)\n"
-                    return
-                }
-                guard NSImage(contentsOfFile: outputPath) != nil, let destination = self.saveDestination else {
-                    self.log += "\nNo valid output image was generated.\n"
-                    return
-                }
+            outputPath = nil
+            savedOutputPaths = []
+            log = "Processing with StarNet2\nExecutable: \(executable.path)\nInput: \(input.path)\n"
+            runner = CLIProcess()
+            runner?.run(executable: executable, arguments: args, onData: { [weak self] data, stderr in
+                guard let self, self.runID == id else { return }
+                self.consume(data, stderr: stderr)
+            }, completion: { [weak self] result in
+                defer { try? FileManager.default.removeItem(at: scratch) }
+                guard let self, self.runID == id else { return }
+                self.consume(Data(), stderr: true, eof: true)
+                self.consume(Data(), stderr: false, eof: true)
+                self.runner = nil
+                defer { self.isProcessing = false }
                 do {
-                    // 原子写入：只在处理成功后替换用户确认的目标。
-                    try Data(contentsOf: URL(fileURLWithPath: outputPath)).write(to: destination, options: .atomic)
+                    let result = try result.get()
+                    if result.cancelled || self.isCancelling {
+                        self.progress = 0
+                        self.progressLabel = "Cancelled."
+                        self.appendLog("Processing cancelled; no result saved.")
+                        return
+                    }
+                    guard result.status == 0 else {
+                        throw CLIError.message("StarNet2 exited with code \(result.status). See the processing log.")
+                    }
+                    // Check the complete requested set before touching any user destination.
+                    let images = try generated.map { url -> NSImage in
+                        guard let image = NSImage(contentsOf: url) else {
+                            throw CLIError.message("StarNet2 did not produce a readable \(url.lastPathComponent).")
+                        }
+                        return image
+                    }
+                    try CLIContract.validateDestinations(input: input, outputs: destinations)
+                    for (source, target) in zip(generated, destinations) {
+                        try Data(contentsOf: source, options: .mappedIfSafe).write(to: target, options: .atomic)
+                        self.savedOutputPaths.append(target)
+                        self.appendLog("Saved result: \(target.path)")
+                    }
                     self.outputPath = destination
+                    self.outputImage = images[0]
+                    self.progress = 1
+                    self.progressLabel = "Complete."
                 } catch {
-                    self.log += "Failed to save: \(error.localizedDescription)\n"
-                    return
-                }
-                // 加载处理后的图像
-                if let outputPath = self.outputPath {
-                    // 检查是否是 FITS 文件
-                    let fileExtension = outputPath.pathExtension.lowercased()
-
-                    if fileExtension == "fits" || fileExtension == "fit" {
-                        // 对于 FITS 输出，加载转换后的 TIFF 预览
-                        let tempDir = FileManager.default.temporaryDirectory
-                        let tiffFile = tempDir.appendingPathComponent("preview_\(UUID().uuidString).tiff")
-
-                        // 转换 FITS 到 TIFF 用于预览
-                        self.convertFITSToTIFF(input: outputPath.path, output: tiffFile.path) { success in
-                            if success, let image = NSImage(contentsOf: tiffFile) {
-                                self.outputImage = image
-                                self.log += "\nProcessing complete! Result saved to: \(outputPath.path)\n"
-                                self.sendCompletionNotification()
-                            } else {
-                                self.log += "\nError: Unable to load output image\n"
-                            }
-                        }
-                    } else if let outputImage = NSImage(contentsOf: outputPath) {
-                        self.outputImage = outputImage
-                        self.log += "\nProcessing complete! Result saved to: \(outputPath.path)\n"
-                        self.sendCompletionNotification()
-                    } else {
-                        self.log += "\nError: Unable to load output image\n"
+                    self.progress = 0
+                    self.progressLabel = "Processing failed."
+                    self.appendLog(error.localizedDescription)
+                    if !self.savedOutputPaths.isEmpty {
+                        self.appendLog("Some outputs were saved before the save error; see the paths above.")
                     }
-                } else {
-                    self.log += "\nError: Invalid output path\n"
                 }
-            }
-        }
-
-        do {
-            if cancelled {
-                DispatchQueue.main.async { self.isProcessing = false }
-                return
-            }
-            try process.run()
-            if cancelled { process.terminate() }
+            })
         } catch {
-            DispatchQueue.main.async {
-                self.log += "Execution error: \(error.localizedDescription)\n"
-                self.isProcessing = false
-                self.progress = 0.0
+            try? FileManager.default.removeItem(at: scratch)
+            appendLog(error.localizedDescription)
+        }
+    }
 
-                // 额外错误信息
-                self.log += "Executable path: \(executablePath)\n"
-                self.log += "Input path: \(inputPath)\n"
-                self.log += "Output path: \(outputPath)\n"
+    private func consume(_ data: Data, stderr: Bool, eof: Bool = false) {
+        let lines = stderr ? decoder.append(data, eof: eof) : stdoutDecoder.append(data, eof: eof)
+        for line in lines where !line.isEmpty {
+            guard stderr, let record = try? JSONDecoder().decode(CLIEvent.self, from: line) else {
+                appendLog(String(decoding: line, as: UTF8.self)); continue
             }
-        }
-    }
-
-    /// 转换 FITS 到 TIFF
-    private func convertFITSToTIFF(input: String, output: String, completion: @escaping (Bool) -> Void) {
-        guard let executablePath = findStarNetExecutable() else {
-            completion(false)
-            return
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = [input, output, "--convert-only"]
-        process.environment = setupEnvironment()
-
-        DispatchQueue.global().async {
-            do {
-                try process.run()
-                process.waitUntilExit()
-                completion(process.terminationStatus == 0)
-            } catch {
-                completion(false)
-            }
-        }
-    }
-
-    /// 发送完成通知
-    private func sendCompletionNotification() {
-        let notification = NSUserNotification()
-        notification.title = "StarNet Pro - Processing Complete"
-        notification.informativeText = "Star removal finished successfully."
-        notification.soundName = NSUserNotificationDefaultSoundName
-
-        NSUserNotificationCenter.default.deliver(notification)
-    }
-
-    /// 验证可执行文件是否有效
-    private func isExecutableValid(_ path: String) -> Bool {
-        var isDirectory: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
-
-        if exists && !isDirectory.boolValue && FileManager.default.isExecutableFile(atPath: path) {
-            return true
-        }
-
-        log += "Validation failed: \(path)\n"
-        log += "Exists: \(exists), Is directory: \(isDirectory.boolValue), Executable: \(FileManager.default.isExecutableFile(atPath: path))\n"
-        return false
-    }
-
-    /// 记录资源目录内容（用于调试）
-    private func logBundleContents() {
-        if let resourcePath = Bundle.main.resourcePath {
-            log += "Application resources: \(resourcePath)\n"
-            do {
-                let contents = try FileManager.default.contentsOfDirectory(atPath: resourcePath)
-                log += "Resource directory contents:\n"
-                for item in contents {
-                    log += "- \(item)\n"
-
-                    // 记录 StarNetBin 目录内容
-                    if item == "StarNetBin" {
-                        let starNetPath = "\(resourcePath)/StarNetBin"
-                        if FileManager.default.fileExists(atPath: starNetPath) {
-                            let starNetContents = try FileManager.default.contentsOfDirectory(atPath: starNetPath)
-                            log += "  StarNetBin contents:\n"
-                            for subItem in starNetContents {
-                                log += "  - \(subItem)\n"
-
-                                // 记录 bin 和 lib 目录内容
-                                if subItem == "bin" || subItem == "lib" {
-                                    let subPath = "\(starNetPath)/\(subItem)"
-                                    if FileManager.default.fileExists(atPath: subPath) {
-                                        let subContents = try FileManager.default.contentsOfDirectory(atPath: subPath)
-                                        log += "    \(subItem) contents:\n"
-                                        for file in subContents {
-                                            log += "    - \(file)\n"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            if record.schema == "starnetastro.cli.diagnostic.v1" || record.event == "error" {
+                if let message = record.message { appendLog("\(record.severity ?? "error"): \(message)") }
+            } else if record.schema == "starnetastro.cli.progress.v1", !isCancelling {
+                if record.event == "finish" {
+                    progressLabel = "Finishing and saving output…"
+                } else if let percent = record.percent, percent.isFinite {
+                    progress = min(1, max(0, percent / 100))
+                    progressLabel = "Processing tiles: \(record.current ?? 0) / \(record.total ?? 0)"
                 }
-            } catch {
-                log += "Unable to list resources: \(error.localizedDescription)\n"
             }
-        } else {
-            log += "Resource directory not found\n"
+        }
+    }
+
+    private func appendLog(_ text: String) {
+        log += text + "\n"
+        if log.count > 250_000 { log = String(log.suffix(200_000)) }
+    }
+
+    func cancelProcessing() {
+        guard isProcessing, !isCancelling else { return }
+        isCancelling = true
+        progressLabel = "Cancelling…"
+        runner?.cancel()
+    }
+
+    func showInFinder(url: URL?) {
+        if let url {
+            NSWorkspace.shared.activateFileViewerSelecting(url == outputPath && !savedOutputPaths.isEmpty ? savedOutputPaths : [url])
         }
     }
 }
