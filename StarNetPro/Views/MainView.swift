@@ -11,41 +11,55 @@ struct MainView: View {
     @EnvironmentObject var processor: StarNetProcessor
 
     var body: some View {
-        NavigationView {
-            // 侧边栏
-            SidebarView()
-                .frame(minWidth: 230, idealWidth: 260, maxWidth: 300)
+        Group {
+            if processor.workspaceAvailable {
+                NavigationView {
+                    // 侧边栏
+                    SidebarView()
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300)
 
-            // 主内容区
-            VStack(alignment: .leading, spacing: 20) {
-                // Image Preview区
-                ImagePreviewSection()
+                    // 主内容区
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Image Preview区
+                        ImagePreviewSection()
 
-                // 处理面板
-                ProcessingPanel()
+                        // 处理面板
+                        ProcessingPanel()
 
-                // 日志视图
-                LogView(logText: $processor.log)
-                    .frame(height: 250)
+                        // 日志视图
+                        LogView(logText: $processor.log)
+                            .frame(height: 250)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .automatic) {
+                        Button(action: processor.openImage) {
+                            Label("Open Image", systemImage: "photo")
+                        }
+                        .disabled(processor.busy)
+                    }
+
+                    ToolbarItem(placement: .automatic) {
+                        Button(action: processor.processImage) {
+                            Label(processor.isProcessing ? "Processing..." : "Start Processing",
+                                  systemImage: processor.isProcessing ? "stop.fill" : "play.fill")
+                        }
+                        .disabled(!processor.canProcess)
+                        .keyboardShortcut("r", modifiers: [.command])
+                    }
+                }
+            } else {
+                CLIOnboardingView()
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button(action: processor.openImage) {
-                    Label("Open Image", systemImage: "photo")
-                }
-            }
-
-            ToolbarItem(placement: .automatic) {
-                Button(action: processor.processImage) {
-                    Label(processor.isProcessing ? "Processing..." : "Start Processing",
-                          systemImage: processor.isProcessing ? "stop.fill" : "play.fill")
-                }
-                .disabled(processor.isProcessing || processor.inputImage == nil)
-                .keyboardShortcut("r", modifiers: [.command])
-            }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            processor.becameActive()
+        }
+        .sheet(isPresented: $processor.showLicense) {
+            LicenseView()
+                .environmentObject(processor)
         }
     }
 }
@@ -56,6 +70,9 @@ struct SidebarView: View {
 
     var body: some View {
         List {
+            Section(header: Text("StarNet2 CLI")) {
+                CLISetupView()
+            }
             Section(header: Text("Settings")) {
                 VStack(alignment: .leading, spacing: 15) {
                     HStack {
@@ -83,14 +100,15 @@ struct SidebarView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 5)
+                .disabled(processor.busy)
             }
 
             Section(header: Text("Help & Support")) {
-                Link("StarNet Documentation", destination: URL(string: "https://www.starnetastro.com/instructions/")!)
-                Link("StarNetPro Github", destination: URL(string: "https://github.com/NEPaladin/StarNetPro/")!)
+                Link("StarNet2 Downloads", destination: CLIContract.downloadPage)
+                Link("StarNetPro GitHub", destination: URL(string: "https://github.com/leohgyang/StarNetPro/")!)
                 Spacer()
                 Button("Report an Issue") {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/NEPaladin/StarNetPro/issues")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/leohgyang/StarNetPro/issues")!)
                 }
             }
         }
@@ -149,6 +167,9 @@ struct ProcessingPanel: View {
 
             if processor.isProcessing {
                 VStack {
+                    ProgressView(value: processor.progress)
+                    Text(processor.progressLabel)
+                        .font(.caption)
 
                     HStack {
                         Spacer()
@@ -169,6 +190,7 @@ struct ProcessingPanel: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
+                        .disabled(!processor.canProcess)
                     } else {
                         Button(action: processor.openImage) {
                             Label("Choose Image", systemImage: "")

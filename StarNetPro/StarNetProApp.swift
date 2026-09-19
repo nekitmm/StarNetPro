@@ -23,6 +23,7 @@ struct StarNetProApp: App {
                     processor.openImage()
                 }
                 .keyboardShortcut("o")
+                .disabled(!processor.workspaceAvailable || processor.busy)
 
                 Divider()
 
@@ -37,7 +38,7 @@ struct StarNetProApp: App {
                     processor.processImage()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                .disabled(processor.isProcessing || processor.inputImage == nil)
+                .disabled(!processor.canProcess)
 
                 Button("Cancel Processing") {
                     processor.cancelProcessing()

@@ -1,11 +1,17 @@
 # Third-party components
 
-The original archive supplied by the maintainer includes the StarNet2 v2.1.0 ARM64 Torch executable, `StarNet2_weights.pt`, LibTorch/c10, and OpenCV dynamic libraries. It does not include the corresponding license files.
+StarNetPro invokes the official StarNet2 CLI as a separate process. This repository
+and its GUI package do not include StarNet2, model weights, LibTorch, OpenCV, or
+other CLI runtime libraries.
 
-These binary dependencies are excluded from the source distribution. Before publishing an application that includes them, verify each component's redistribution terms with the original distribution or rights holder and include the required licenses and notices. Free use does not automatically establish permission to redistribute.
+Install the complete CLI from [StarNetAstro](https://starnetastro.com/cli-tools/starnet/)
+or use the in-app download action, which fetches the official installer directly.
+The CLI package supplies its own license and third-party notices. StarNetPro
+presents the installed product license and records acceptance by content hash.
 
-Official downloads: https://starnetastro.com/cli-tools/starnet/
+The previous integration required an externally supplied 2023 Torch engine bundle.
+That packaging path has been removed; do not put old binaries into the GUI bundle.
 
-Author information: https://starnetastro.com/about/
-
-The accompanying local test build reuses the supplied components for validation. Its existence does not establish that public redistribution is permitted.
+StarNetPro's source-code license still requires an upstream maintainer decision.
+This contribution does not assert ownership of the original source or grant rights
+to redistribute separately licensed StarNet2 components.
