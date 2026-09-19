@@ -77,3 +77,5 @@
 - Setup-gate revision: all 21 tests passed again; local Release app built and
   signature verified. UAT copy is in Downloads/StarNetPro-CLI-upgrade-r2 on the Mac.
   ZIP SHA-256: 2f5fce853ce2f25036b6f739763f65d182e26e187be8eb12dc5a6a80aca92efe.
+- Draft upstream PR: https://github.com/leohgyang/StarNetPro/pull/1.
+  Code commit: 0838b04. Upgrade-path UAT is in progress; no merge/release claimed.
