@@ -27,11 +27,15 @@ No FITS preview, processing options beyond those listed below, CLI release, or p
   the workspace. Later refreshes keep an existing workspace mounted; an optional
   network update check must not delay opening it.
 - Short status, Download and Install (automatically skipped for a compatible CLI),
-  Check on Launch, and Download Manually. Keep advanced location controls in the
+  unconditional Skip, Check on Launch, and Download Manually. Keep advanced location controls in the
   menu bar so a stale custom path cannot strand users behind the setup gate.
 - Minimum compatible version is 2.6.2; newer versions still must satisfy the
   machine contract. A newer feed release does not raise this floor automatically.
-- Skipping installation never skips license acceptance. An already accepted compatible
+- Skip opens the GUI for browsing/previews even if the CLI is absent or too old,
+  and remains enabled during setup activity. Keep this choice for the current
+  session across re-probes, not future launches. A Set up StarNet2 action returns
+  to onboarding. Processing still requires a compatible CLI and accepted license;
+  skipping never grants either. An already accepted compatible
   installation opens the workspace directly. Recheck on app activation, including
   after a manual installation; no Refresh button is needed on the start screen.
 

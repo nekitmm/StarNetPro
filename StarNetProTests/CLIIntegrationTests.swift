@@ -244,6 +244,56 @@ final class CLIIntegrationTests: XCTestCase {
         XCTAssertFalse(processor.showLicense)
     }
 
+    func testSkipAlwaysOpensWorkspaceWithoutEnablingUnsupportedProcessing() async throws {
+        let root = try temporaryDirectory()
+        let input = try fixture(root)
+        let missing = root.appendingPathComponent("missing-starnet2")
+        let old = try executable("printf '%s' '\(machineInfo(version: "2.5.0"))'")
+        for url in [missing, old] {
+            let settings = defaults()
+            settings.set(url.path, forKey: "cliPath")
+            let processor = StarNetProcessor(defaults: settings, discover: false)
+            await processor.refreshCLI()
+            XCTAssertFalse(processor.workspaceAvailable)
+            processor.isDownloading = true
+            processor.skipSetup()
+            XCTAssertTrue(processor.workspaceAvailable, "Skip must remain available even during setup activity")
+            processor.isDownloading = false
+            processor.loadImage(at: input)
+            XCTAssertNotNil(processor.inputImage)
+            XCTAssertFalse(processor.readyToProcess)
+            XCTAssertFalse(processor.canProcess)
+            processor.processImage()
+            XCTAssertFalse(processor.isProcessing)
+            await processor.refreshCLI()
+            XCTAssertTrue(processor.workspaceAvailable, "Reactivation must not undo Skip")
+            processor.reopenSetup()
+            XCTAssertFalse(processor.workspaceAvailable)
+        }
+    }
+
+    func testSkipDoesNotAcceptLicenseOrPersistAcrossLaunches() async throws {
+        let root = try temporaryDirectory()
+        let exe = try executable("printf '%s' '\(machineInfo())'", directory: root)
+        try Data("Terms to accept".utf8).write(to: root.appendingPathComponent("LICENSE.txt"))
+        let settings = defaults()
+        settings.set(exe.path, forKey: "cliPath")
+        let processor = StarNetProcessor(defaults: settings, discover: false)
+        await processor.refreshCLI()
+        processor.showLicense = false
+        processor.skipSetup()
+        processor.loadImage(at: try fixture(root))
+        XCTAssertTrue(processor.workspaceAvailable)
+        XCTAssertFalse(processor.licenseAccepted)
+        XCTAssertFalse(processor.canProcess)
+        processor.acceptLicense()
+        XCTAssertTrue(processor.canProcess)
+        let relaunched = StarNetProcessor(defaults: settings, discover: false)
+        XCTAssertFalse(relaunched.setupSkipped)
+        await relaunched.refreshCLI()
+        XCTAssertTrue(relaunched.readyToProcess)
+    }
+
     func testLicenseAcceptancePersistsAndChangesInvalidateIt() async throws {
         let root = try temporaryDirectory()
         let exe = try executable("printf '%s' '\(machineInfo())'", directory: root)

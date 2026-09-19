@@ -200,6 +200,15 @@ struct ProcessingPanel: View {
                 .font(.headline)
                 .padding(.bottom, 5)
 
+            if !processor.readyToProcess {
+                Text(processor.cliInfo == nil ? "Install or update StarNet2 to process images." :
+                        "Accept the StarNet2 license to process images.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Set up StarNet2…", action: processor.reopenSetup)
+                    .disabled(processor.busy)
+            }
+
             if processor.isProcessing {
                 VStack {
                     ProgressView(value: processor.progress)

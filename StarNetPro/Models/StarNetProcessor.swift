@@ -22,6 +22,7 @@ final class StarNetProcessor: ObservableObject {
     @Published var setupSummary = "Checking for StarNet2…"
     @Published var isChecking = false
     @Published private(set) var hasCompletedInitialCheck = false
+    @Published private(set) var setupSkipped = false
     @Published var isDownloading = false
     @Published var latestRelease: CLIRelease?
     @Published var updateMessage = ""
@@ -46,10 +47,11 @@ final class StarNetProcessor: ObservableObject {
     private var runID = UUID()
 
     var busy: Bool { isProcessing || isChecking || isDownloading }
-    var workspaceAvailable: Bool { cliInfo != nil && licenseAccepted }
+    var readyToProcess: Bool { cliInfo != nil && licenseAccepted }
+    var workspaceAvailable: Bool { setupSkipped || readyToProcess }
     var needsLicenseAcceptance: Bool { cliInfo != nil && !licenseAccepted }
     var canReviewLicense: Bool { needsLicenseAcceptance && !busy }
-    var canProcess: Bool { !busy && cliInfo != nil && licenseAccepted && inputPath != nil }
+    var canProcess: Bool { !busy && readyToProcess && inputPath != nil }
     var newerReleaseAvailable: Bool {
         guard let latest = try? latestRelease?.releaseVersion else { return false }
         guard let installed = try? cliInfo?.releaseVersion else { return true }
@@ -202,6 +204,15 @@ final class StarNetProcessor: ObservableObject {
     func becameActive() {
         // Also covers installations started through the manual download link.
         if !busy { Task { await refreshCLI() } }
+    }
+
+    func skipSetup() {
+        // Browsing the GUI does not require an installed engine or accepted terms.
+        setupSkipped = true
+    }
+
+    func reopenSetup() {
+        setupSkipped = false
     }
 
     func reviewLicense() {

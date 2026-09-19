@@ -64,10 +64,13 @@ struct CLIOnboardingView: View {
                         .controlSize(.large)
                         .disabled(processor.busy)
                 } else {
-                    Button("Download and Install…") { Task { await processor.downloadAndInstall() } }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(processor.busy)
+                    HStack(spacing: 12) {
+                        Button("Download and Install…") { Task { await processor.downloadAndInstall() } }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(processor.busy)
+                        Button("Skip", action: processor.skipSetup)
+                    }
+                    .controlSize(.large)
                     Toggle("Check on Launch", isOn: $processor.automaticallyCheckUpdates)
                         .toggleStyle(.checkbox)
                         .disabled(processor.busy)

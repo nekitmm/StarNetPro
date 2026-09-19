@@ -244,3 +244,26 @@
   ZIP SHA-256: 3eceaefce20a1f9021aa517df2b525353f4ec07e9b19e2763765a554768760b0.
   Visual launch/checkbox UAT remains with the user; no CLI installation, stored
   license acceptance, public release or existing test copy was changed.
+
+## Unconditional setup Skip
+
+- Before making upstream PR #1 ready for review, user requested unconditional Skip
+  on the installation/update screen. PR remains draft; no review-ready transition
+  was performed. Prior diff snapshot was 22 files, +2071/-656 before this addition.
+- Added an always-enabled Skip button that opens the workspace for browsing and
+  image previews even with a missing or old CLI, including during setup activity.
+  Session-only skip state survives re-probes but is not saved across launches.
+  Processing still requires a compatible CLI and accepted terms. A contextual
+  explanation and Set up StarNet2 action make that requirement actionable.
+- Added tests for missing/old CLI, busy setup, preview access, blocked processing,
+  re-probe stability, returning to setup, unaccepted terms and new-session state.
+  All 30 native tests passed, followed by Release build and strict signature
+  verification. git diff --check passed; no upstream pre-commit config exists.
+  Existing Xcode exit-code-zero compiler diagnostic remains. Processing arithmetic
+  is unchanged; the previous real-image parity qualification remains applicable.
+- Initial spec patch context failed after the code edits had applied; inspected
+  the diff, corrected the spec separately, and only then synced/tested/built.
+- Revealed Downloads/StarNetPro-CLI-upgrade-r9/StarNetPro.app on the Mac.
+  ZIP SHA-256: 81e2cb8b170f23c618933fa38a2b604918bf302f3ead1b4563826662272a3432.
+  No installed CLI, actual license acceptance, system configuration or prior app
+  copy changed. Manual confirmation of the new Skip screen is pending.

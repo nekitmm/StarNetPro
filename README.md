@@ -10,6 +10,10 @@ created by Sunny Ma. This is not an official StarNet product.
    A brief opening indicator is shown until this check completes; compatible,
    previously accepted installations go straight to the workspace.
 2. If it is missing or incompatible, click **Download and Install…**.
+   **Skip** is always available on this screen: it opens the GUI for browsing
+   and image previews without installing anything. Processing still requires a
+   compatible CLI and accepted terms. Use **Set up StarNet2…** to return later;
+   skipping lasts for this app session.
    The app fetches the latest release for your Mac from StarNetAstro, verifies
    the installer's size and SHA-256, and asks macOS to assess its trust.
    A spinner identifies the current download/verification stage; it does not
