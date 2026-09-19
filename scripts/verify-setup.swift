@@ -11,6 +11,7 @@ struct VerifySetup {
         let processor = StarNetProcessor(defaults: defaults, discover: false)
         await processor.refreshCLI()
         print(processor.setupMessage)
+        print("Summary: \(processor.setupSummary); Skip available: \(processor.canSkipSetup)")
         print("Compatible: \(processor.cliInfo != nil); busy: \(processor.busy); license accepted: \(processor.licenseAccepted)")
     }
 }

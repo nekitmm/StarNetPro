@@ -66,12 +66,14 @@ final class CLIIntegrationTests: XCTestCase {
     func testCapabilities() throws {
         let good = try JSONDecoder().decode(CLIInfo.self, from: Data(machineInfo().utf8))
         XCTAssertNoThrow(try good.validate())
-        for json in [machineInfo(version: "2.5.0"), machineInfo(product: "deepsnr"), machineInfo(progress: false)] {
+        for json in [machineInfo(version: "2.5.0"), machineInfo(version: "2.6.1"), machineInfo(product: "deepsnr"), machineInfo(progress: false)] {
             let info = try JSONDecoder().decode(CLIInfo.self, from: Data(json.utf8))
             XCTAssertThrowsError(try info.validate())
         }
-        let future = try JSONDecoder().decode(CLIInfo.self, from: Data(machineInfo(version: "2.7.0").utf8))
-        XCTAssertNoThrow(try future.validate())
+        for version in ["2.6.2", "2.6.3", "2.7.0", "3.0.0"] {
+            let future = try JSONDecoder().decode(CLIInfo.self, from: Data(machineInfo(version: version).utf8))
+            XCTAssertNoThrow(try future.validate())
+        }
     }
 
     func testDiscoveryAndExplicitOverride() {
@@ -163,11 +165,19 @@ final class CLIIntegrationTests: XCTestCase {
         XCTAssertNotNil(first.cliInfo)
         XCTAssertFalse(first.licenseAccepted)
         XCTAssertFalse(first.workspaceAvailable)
+        XCTAssertTrue(first.canSkipSetup)
+        first.skipSetup()
+        XCTAssertTrue(first.showLicense)
+        XCTAssertFalse(first.licenseAccepted)
+        XCTAssertFalse(first.workspaceAvailable)
         first.acceptLicense()
         XCTAssertTrue(first.workspaceAvailable)
         let second = StarNetProcessor(defaults: settings, discover: false)
         await second.refreshCLI()
         XCTAssertTrue(second.licenseAccepted)
+        second.skipSetup()
+        XCTAssertTrue(second.workspaceAvailable)
+        XCTAssertFalse(second.showLicense)
         try Data("Test license B".utf8).write(to: license)
         await second.refreshCLI()
         XCTAssertFalse(second.licenseAccepted)
@@ -178,7 +188,7 @@ final class CLIIntegrationTests: XCTestCase {
     }
 
     func testOldAndMalformedCLILeaveSetupAvailable() async throws {
-        for text in ["starnet2 version 2.1.0", machineInfo(version: "2.5.0"), "{}"] {
+        for text in ["starnet2 version 2.1.0", machineInfo(version: "2.5.0"), machineInfo(version: "2.6.1"), "{}"] {
             let exe = try executable("printf '%s' '\(text)'")
             let settings = defaults()
             settings.set(exe.path, forKey: "cliPath")
@@ -187,6 +197,10 @@ final class CLIIntegrationTests: XCTestCase {
             XCTAssertNil(processor.cliInfo)
             XCTAssertFalse(processor.busy)
             XCTAssertFalse(processor.canProcess)
+            XCTAssertFalse(processor.canSkipSetup)
+            processor.skipSetup()
+            XCTAssertFalse(processor.showLicense)
+            XCTAssertFalse(processor.workspaceAvailable)
         }
     }
 
@@ -197,6 +211,10 @@ final class CLIIntegrationTests: XCTestCase {
         let processor = StarNetProcessor(defaults: settings, discover: false)
         await processor.refreshCLI()
         XCTAssertNil(processor.cliInfo)
+        XCTAssertFalse(processor.workspaceAvailable)
+        XCTAssertFalse(processor.canSkipSetup)
+        processor.skipSetup()
+        XCTAssertFalse(processor.showLicense)
         XCTAssertFalse(processor.workspaceAvailable)
         XCTAssertTrue(processor.setupMessage.contains("StarNet2 2.5.0 is installed"))
         XCTAssertTrue(processor.setupMessage.contains("Update to StarNet2 2.6.2 or newer"))

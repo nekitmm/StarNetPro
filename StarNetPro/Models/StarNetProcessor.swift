@@ -17,6 +17,7 @@ final class StarNetProcessor: ObservableObject {
     @Published var cliInfo: CLIInfo?
     @Published var cliURL: URL?
     @Published var setupMessage = "Checking for StarNet2…"
+    @Published var setupSummary = "Checking for StarNet2…"
     @Published var isChecking = false
     @Published var isDownloading = false
     @Published var latestRelease: CLIRelease?
@@ -36,12 +37,12 @@ final class StarNetProcessor: ObservableObject {
     private var licenseHash = ""
     private let defaults: UserDefaults
     private var isCancelling = false
-    private var refreshAfterInstaller = false
     private var checkingUpdates = false
     private var runID = UUID()
 
     var busy: Bool { isProcessing || isChecking || isDownloading }
     var workspaceAvailable: Bool { cliInfo != nil && licenseAccepted }
+    var canSkipSetup: Bool { cliInfo != nil && !busy }
     var canProcess: Bool { !busy && cliInfo != nil && licenseAccepted && inputPath != nil }
     var newerReleaseAvailable: Bool {
         guard let latest = try? latestRelease?.releaseVersion else { return false }
@@ -65,13 +66,14 @@ final class StarNetProcessor: ObservableObject {
         isChecking = true
         defer { isChecking = false }
         var failures: [String] = []
+        var summary = "Install StarNet2 to get started."
         let paths = CLIContract.candidates(custom: defaults.string(forKey: "cliPath"),
                                            path: ProcessInfo.processInfo.environment["PATH"])
         for url in paths where FileManager.default.isExecutableFile(atPath: url.path) {
             do {
                 let result = try await CLIProcess.capture(url, ["--machine-info"])
                 guard result.status == 0, !result.cancelled else {
-                    throw CLIError.message("Unable to probe StarNet2. Install CLI 2.6.2 or newer.")
+                    throw CLIError.message("Unable to probe StarNet2. Install CLI \(CLIContract.minimumVersionText) or newer.")
                 }
                 let info = try JSONDecoder().decode(CLIInfo.self, from: result.stdout)
                 try info.validate()
@@ -88,15 +90,17 @@ final class StarNetProcessor: ObservableObject {
                 cliInfo = info
                 cliURL = url
                 setupMessage = info.label
-                refreshAfterInstaller = false
+                setupSummary = "StarNet2 \(info.version) is installed."
                 return
             } catch {
+                summary = "Update StarNet2 to continue."
                 var message = error.localizedDescription
                 if let version = try? await CLIProcess.capture(url, ["--version"]),
                    version.status == 0, !version.cancelled,
                    let legacy = CLIContract.legacyVersion(version.stdout),
-                   let parsed = try? CLIVersion(legacy), parsed < (try! CLIVersion("2.6.2")) {
-                    message = "StarNet2 \(legacy) is installed but is not supported by this version of StarNetPro. Update to StarNet2 2.6.2 or newer."
+                   let parsed = try? CLIVersion(legacy), parsed < CLIContract.minimumVersion {
+                    message = "StarNet2 \(legacy) is installed but is not supported by this version of StarNetPro. Update to StarNet2 \(CLIContract.minimumVersionText) or newer."
+                    summary = "StarNet2 \(legacy) is too old. Install \(CLIContract.minimumVersionText) or newer."
                 }
                 failures.append("\(url.path): \(message)")
             }
@@ -105,6 +109,7 @@ final class StarNetProcessor: ObservableObject {
         cliURL = nil
         licenseAccepted = false
         licenseText = ""
+        setupSummary = summary
         setupMessage = failures.isEmpty ? "Install the official StarNet2 CLI to start processing." :
             "No compatible StarNet2 installation found.\n" + failures.joined(separator: "\n")
     }
@@ -149,7 +154,8 @@ final class StarNetProcessor: ObservableObject {
         } catch {
             guard !isDownloading else { return }
             latestRelease = nil
-            updateMessage = "Could not check for updates. Your installed CLI can still be used.\n\(error.localizedDescription)"
+            appendLog("Update check failed: \(error.localizedDescription)")
+            updateMessage = "Could not check for updates. Try again or download manually."
         }
     }
 
@@ -171,13 +177,22 @@ final class StarNetProcessor: ObservableObject {
             guard NSWorkspace.shared.open(installer) else {
                 throw CLIError.message("Could not open Apple Installer. Download the CLI from the official website.")
             }
-            refreshAfterInstaller = true
-            updateMessage = "Complete Apple Installer, then click Refresh CLI (or Use Automatic Location if you selected a portable CLI). Installation requires your approval."
-        } catch { updateMessage = error.localizedDescription }
+            updateMessage = "Complete Apple Installer, then return here."
+        } catch {
+            appendLog("Installer setup failed: \(error.localizedDescription)")
+            updateMessage = "Could not prepare the installer. Try again or download manually."
+        }
     }
 
     func becameActive() {
-        if refreshAfterInstaller, !busy { Task { await refreshCLI() } }
+        // Also covers installations started through the manual download link.
+        if !busy { Task { await refreshCLI() } }
+    }
+
+    func skipSetup() {
+        guard canSkipSetup else { return }
+        // Skip installation, never compatibility checks or license acceptance.
+        if !licenseAccepted { showLicense = true }
     }
 
     func openImage() {

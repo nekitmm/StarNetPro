@@ -18,3 +18,14 @@ CLI, targeting 2.6.2-0241. Keep TIFF/PNG/JPEG and starless/stars-only controls.
 - Test contracts and native Mac processing; document all untested UAT separately.
 
 No FITS preview, new processing options, CLI release, or public GUI release.
+
+## Simplified first-run screen
+
+- Short status, Download and Install, Skip only for an already compatible CLI,
+  Check on Launch, and Download Manually. Keep advanced location controls in the
+  menu bar so a stale custom path cannot strand users behind the setup gate.
+- Minimum compatible version is 2.6.2; newer versions still must satisfy the
+  machine contract. A newer feed release does not raise this floor automatically.
+- Skip avoids installation, not license acceptance. An already accepted compatible
+  installation opens the workspace directly. Recheck on app activation, including
+  after a manual installation; no Refresh button is needed on the start screen.

@@ -46,8 +46,8 @@ struct CLIInfo: Decodable {
         guard schema == "starnetastro.cli.machine-info.v1", product == "starnet2" else {
             throw CLIError.message("This executable does not report the supported StarNet2 CLI contract.")
         }
-        guard try releaseVersion >= CLIVersion("2.6.2") else {
-            throw CLIError.message("StarNet2 2.6.2 or newer is required. Install the current official CLI.")
+        guard try releaseVersion >= CLIContract.minimumVersion else {
+            throw CLIError.message("StarNet2 \(CLIContract.minimumVersionText) or newer is required. Install the current official CLI.")
         }
         for flag in ["--input", "--output", "--stride", "--mask", "--machine-progress"] {
             guard options.contains(where: { $0.flags.contains(flag) }) else {
@@ -58,6 +58,9 @@ struct CLIInfo: Decodable {
 }
 
 enum CLIContract {
+    // Deliberate compatibility floor, not a moving requirement from the update feed.
+    static let minimumVersionText = "2.6.2"
+    static let minimumVersion = try! CLIVersion(minimumVersionText)
     static let downloadPage = URL(string: "https://starnetastro.com/cli-tools/starnet/")!
     static let feedURL = URL(string: "https://starnetastro.com/cli-tools/latest.json")!
 

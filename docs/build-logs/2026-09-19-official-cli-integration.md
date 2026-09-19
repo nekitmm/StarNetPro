@@ -100,3 +100,29 @@
   e8c17b1df76af7c10c4e3d81a787cd40b6da09376894803761fe41fe96763013.
   Installed CLI still reported 2.5.0 before the tests; no system install changed.
   Spinner's visual behavior remains for user UAT, distinct from service-phase tests.
+
+## Simplified setup and compatibility floor
+
+- Rechecked the official latest.json feed: all four platforms list 2.6.2-0241.
+  Centralized the fixed 2.6.2 minimum; newer versions still require the supported
+  machine contract. Publishing a newer release does not invalidate 2.6.2.
+- Simplified the start screen to short status, Download and Install, conditional
+  Skip, Check on Launch, and Download Manually, with transient activity/error text.
+  Skip never bypasses compatibility or license acceptance. An accepted compatible
+  installation goes directly to the workspace. App activation rechecks the CLI,
+  including after a manually downloaded installer.
+- Kept executable selection and automatic-location recovery in a menu, accessible
+  before setup completes, to avoid trapping users with a stale custom CLI path.
+  README and specification reflect the reduced screen and menu recovery path.
+- All 21 native tests passed, including expanded 2.6.1 rejection, 2.6.2/2.6.3/
+  2.7.0/3.0.0 capability checks, and Skip/license gate assertions. git diff --check
+  passed. No pre-commit configuration exists in this upstream repository.
+- Compiled scripts/verify-setup.swift with the production models. The unchanged
+  system CLI 2.5.0 reported incompatible/Skip=false; the extracted official
+  2.6.2-0241 installer payload reported compatible/Skip=true. Both tests used
+  isolated preferences and did not accept terms or install anything.
+- Native Release build completed; the recurring Xcode 27 exit-code-zero compiler
+  diagnostic remains, with a successful build exit and strict app signature check.
+  New local UAT app: Downloads/StarNetPro-CLI-upgrade-r4/StarNetPro.app.
+  ZIP SHA-256: 6407a8ee55ff5f9e797ea651672d8f46f39b3a02c925b5bc84c5a1778eee41e7.
+  Revealed in Finder. Visual approval is pending; no public release was made.

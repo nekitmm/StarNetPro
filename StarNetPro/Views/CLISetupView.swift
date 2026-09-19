@@ -2,11 +2,10 @@ import SwiftUI
 
 struct CLISetupView: View {
     @EnvironmentObject var processor: StarNetProcessor
-    var prominent = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(processor.setupMessage).font(prominent ? .body : .caption).textSelection(.enabled)
+            Text(processor.setupMessage).font(.caption).textSelection(.enabled)
             if let url = processor.cliURL {
                 Text(url.path).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled)
             }
@@ -15,12 +14,12 @@ struct CLISetupView: View {
                     processor.showLicense = true
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(prominent ? .large : .regular)
+                .controlSize(.regular)
             }
             if processor.cliInfo == nil || processor.newerReleaseAvailable {
                 Button("Download and Install CLI…") { Task { await processor.downloadAndInstall() } }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(prominent ? .large : .regular)
+                    .controlSize(.regular)
                 Text("Downloads from StarNetAstro, then opens Apple Installer for your approval.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -53,14 +52,33 @@ struct CLIOnboardingView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Image(systemName: "sparkles.rectangle.stack")
                     .font(.system(size: 40)).foregroundStyle(.tint)
-                Text(processor.cliInfo == nil ? "Set up StarNet2" : "One more step")
+                Text("Set up StarNet2")
                     .font(.largeTitle).fontWeight(.semibold)
-                Text(processor.cliInfo == nil
-                     ? "StarNetPro uses the official StarNet2 CLI to process your images. Install a compatible version to get started."
-                     : "Review and accept the StarNet2 license to open the image workspace.")
+                Text(processor.setupSummary)
                     .foregroundStyle(.secondary)
-                if processor.isChecking { ProgressView("Checking your installation…") }
-                CLISetupView(prominent: true)
+                HStack(spacing: 12) {
+                    Button("Download and Install…") { Task { await processor.downloadAndInstall() } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(processor.busy)
+                    if processor.cliInfo != nil {
+                        Button("Skip", action: processor.skipSetup)
+                            .disabled(!processor.canSkipSetup)
+                    }
+                }
+                .controlSize(.large)
+                Toggle("Check on Launch", isOn: $processor.automaticallyCheckUpdates)
+                    .toggleStyle(.checkbox)
+                    .disabled(processor.busy)
+                Link("Download Manually", destination: CLIContract.downloadPage)
+                if processor.isDownloading {
+                    ProgressView(processor.updateMessage)
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                } else if processor.isChecking {
+                    ProgressView().controlSize(.small)
+                } else if !processor.updateMessage.isEmpty {
+                    Text(processor.updateMessage).font(.caption).foregroundStyle(.secondary)
+                }
             }
             .padding(36)
             .frame(maxWidth: 620, alignment: .leading)

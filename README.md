@@ -7,24 +7,26 @@ created by Sunny Ma. This is not an official StarNet product.
 
 1. Open StarNetPro. It checks for StarNet2 in the official installer location
    (`/usr/local/bin/starnet2`), then Homebrew/PATH locations.
-2. If it is missing or incompatible, click **Download and Install CLI…**.
+2. If it is missing or incompatible, click **Download and Install…**.
    The app fetches the latest release for your Mac from StarNetAstro, verifies
    the installer's size and SHA-256, and asks macOS to assess its trust.
    A spinner identifies the current download/verification stage; it does not
    claim a transfer percentage.
 3. Apple Installer opens. Review the package and approve installation there.
    StarNetPro never asks for your administrator password or installs silently.
-4. Return to StarNetPro and click **Refresh CLI** if necessary. Review and accept
-   the installed StarNet2 license before processing. Acceptance is remembered;
+4. Return to StarNetPro; it rechecks the installation automatically. **Skip** uses
+   an already compatible CLI instead of installing again. If its terms have not
+   been accepted, Skip opens the license dialog first. Acceptance is remembered;
    changed license contents require renewed acceptance.
 5. Open a TIFF, PNG or JPEG, choose the stride and output mode, and process it.
    **Stars Only** saves the CLI's subtractive star mask instead of its starless
    output. Output is saved as TIFF.
 
-For a portable installation, use **Choose…** to select its `starnet2` executable.
+For a portable installation, use **StarNet2 CLI → Choose Executable…** in the
+menu bar to select its `starnet2` executable without cluttering the start screen.
 Keep the complete CLI archive together, including its model, libraries and
 `LICENSE.txt`. A custom selection takes precedence over automatic discovery.
-Use **Use Automatic Location** after installing system-wide if an old custom
+Use **StarNet2 CLI → Use Automatic Location** after installing system-wide if an old custom
 selection is still active.
 
 The CLI is downloaded directly from official sources, not bundled in this app.
@@ -37,6 +39,8 @@ models, or configure library paths.
   Silicon; a native Intel GUI has not been qualified by this change.
 - StarNet2 CLI **2.6.2 or newer** with the supported machine-info and machine-progress
   contracts is required. The old bundled 2.1.0 Torch engine is no longer supported.
+  The minimum stays at 2.6.2 when newer releases are published; update availability
+  is separate from compatibility.
 - Apple Silicon downloads select the CoreML CLI, including if a GUI is translated
   by Rosetta. The release feed also defines the Intel/ORT package lane.
 - Processing passes the original file to the CLI; previews are not processing
