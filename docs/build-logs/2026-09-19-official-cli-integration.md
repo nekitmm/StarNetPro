@@ -192,3 +192,21 @@
   Local test ZIP SHA-256:
   a463ee3f4db694ffa6c3eb646e4cec281142e62794c0581a3407259883218abe.
   No installed CLI, real preferences, public release or system configuration changed.
+
+## Advanced header hit target
+
+- Replaced the native DisclosureGroup header with a single plain button containing
+  the chevron and Advanced label. A 12-point gap separates them; a full-width
+  rectangular hit target makes arrow, text and remaining row space clickable.
+  Expanded/collapsed state is exposed to accessibility. Expanded controls are
+  siblings, not children of the toggle button, so using them cannot collapse it.
+- An initial documentation patch context mismatch prevented applying the edit;
+  the subsequent shell commands built unchanged source. Corrected the patch and
+  reran sync, all 25 tests and Release build after verifying the actual source diff.
+  Only the corrected second build is staged as r7. Native tests, strict signature
+  verification and git diff --check passed. Existing Xcode exit-code-zero compiler
+  diagnostics remain; no processing behavior changed or real-image rerun needed.
+- Revealed Downloads/StarNetPro-CLI-upgrade-r7/StarNetPro.app on the Mac.
+  ZIP SHA-256: 6089e9b1d46a5f1aeae49a9dd00dfda23feef983cd48e8633e130c6d0bf1feb9.
+  Manual pointer/keyboard/accessibility interaction approval remains for UAT;
+  automated model tests do not establish the rendered header hit target.

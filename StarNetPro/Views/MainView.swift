@@ -110,7 +110,27 @@ struct SidebarView: View {
             }
 
             Section {
-                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                Button {
+                    showAdvanced.toggle()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 12)
+                            .accessibilityHidden(true)
+                        Text("Advanced")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Advanced")
+                .accessibilityValue(showAdvanced ? "Expanded" : "Collapsed")
+                .accessibilityHint("Show or hide technical settings")
+
+                if showAdvanced {
                     CLISetupView()
                         .padding(.vertical, 8)
                     Link("StarNetPro GitHub", destination: URL(string: "https://github.com/leohgyang/StarNetPro/")!)

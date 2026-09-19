@@ -45,6 +45,9 @@ changed terms require acceptance again. Never infer consent from installation.
 - Sidebar header shows only the installed semantic version. Location, backend,
   build details, license, update/discovery controls and support links move into
   a collapsed Advanced section below processing settings.
+- Advanced uses one full-width header button: chevron, label and remaining row
+  area all toggle it, with a 12-point gap between icon and text. Keep the expanded
+  state accessible and controls within the expanded content independent.
 - Always save and preview the starless image. Replace Stars Only with independent
   Difference and Unscreen checkboxes, both initially off. Both may be selected.
   Pass --mask and --unscreen directly to the CLI in the same inference run.
