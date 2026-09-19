@@ -103,8 +103,8 @@ bash scripts/test.sh
 
 No CLI, weights, or third-party runtime is needed to compile or run the automated
 tests. The tests use temporary fake executables and fixture images. The build
-script creates an ad-hoc-signed local test ZIP under `dist/`; it does not produce
-a Developer ID-signed/notarized public release.
+script creates `dist/StarNetPro.app` and an ad-hoc-signed local test ZIP under
+`dist/`; it does not produce a Developer ID-signed/notarized public release.
 
 For optional real-release checks on a Mac:
 
