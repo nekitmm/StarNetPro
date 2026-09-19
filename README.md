@@ -7,6 +7,8 @@ created by Sunny Ma. This is not an official StarNet product.
 
 1. Open StarNetPro. It checks for StarNet2 in the official installer location
    (`/usr/local/bin/starnet2`), then Homebrew/PATH locations.
+   A brief opening indicator is shown until this check completes; compatible,
+   previously accepted installations go straight to the workspace.
 2. If it is missing or incompatible, click **Download and Install…**.
    The app fetches the latest release for your Mac from StarNetAstro, verifies
    the installer's size and SHA-256, and asks macOS to assess its trust.
@@ -26,6 +28,11 @@ created by Sunny Ma. This is not an official StarNet product.
    Saving `starless.tiff` also saves `starless_difference.tiff` and/or
    `starless_unscreen.tiff` beside it. Existing companion files require confirmation
    before replacement. All outputs come directly from one CLI run.
+
+Enable **Linear image** only for unstretched data (off by default). This passes
+`--linear` to StarNet2: the CLI automatically stretches for neural processing and
+then returns the result to linear data. Leave it off for already stretched images.
+The GUI does not perform its own stretching or change supported input formats.
 
 Only the installed version appears at the top of the sidebar. Expand **Advanced**
 below the processing settings for license, location, backend/build, updates and
@@ -112,6 +119,7 @@ The first compares the GUI processing path's starless, Difference and Unscreen f
 byte-for-byte with direct CLI results and observes live progress. Use a new output
 directory. The second downloads and verifies the official installer, but never
 opens or installs it. Neither test establishes manual GUI/Installer usability.
+Append `--linear` to the first verifier command to compare linear-mode outputs.
 
 See [verification notes](docs/build-logs/2026-09-19-official-cli-integration.md)
 for tested releases, results and outstanding UAT.

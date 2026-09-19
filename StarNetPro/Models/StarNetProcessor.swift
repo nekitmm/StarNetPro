@@ -13,6 +13,7 @@ final class StarNetProcessor: ObservableObject {
     @Published var progress: Double = 0
     @Published var progressLabel = ""
     @Published var strideValue = 256
+    @Published var linearImage = false
     @Published var createDifference = false
     @Published var createUnscreen = false
     @Published var cliInfo: CLIInfo?
@@ -20,6 +21,7 @@ final class StarNetProcessor: ObservableObject {
     @Published var setupMessage = "Checking for StarNet2…"
     @Published var setupSummary = "Checking for StarNet2…"
     @Published var isChecking = false
+    @Published private(set) var hasCompletedInitialCheck = false
     @Published var isDownloading = false
     @Published var latestRelease: CLIRelease?
     @Published var updateMessage = ""
@@ -68,7 +70,10 @@ final class StarNetProcessor: ObservableObject {
     func refreshCLI() async {
         guard !busy else { return }
         isChecking = true
-        defer { isChecking = false }
+        defer {
+            isChecking = false
+            hasCompletedInitialCheck = true
+        }
         var failures: [String] = []
         var summary = "Install StarNet2 to get started."
         let paths = CLIContract.candidates(custom: defaults.string(forKey: "cliPath"),
@@ -258,12 +263,12 @@ final class StarNetProcessor: ObservableObject {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         startProcessing(executable: executable, input: input, destination: destination,
-                        difference: difference, unscreen: unscreen, stride: strideValue)
+                        difference: difference, unscreen: unscreen, stride: strideValue, linear: linearImage)
     }
 
     /// UI and integration tests use the same runner; original image files are passed unchanged.
     func startProcessing(executable: URL, input: URL, destination: URL,
-                         difference: URL? = nil, unscreen: URL? = nil, stride: Int) {
+                         difference: URL? = nil, unscreen: URL? = nil, stride: Int, linear: Bool = false) {
         guard !isProcessing else { return }
         let destinations = [destination, difference, unscreen].compactMap { $0 }
         do {
@@ -279,7 +284,8 @@ final class StarNetProcessor: ObservableObject {
             let stars = difference.map { _ in scratch.appendingPathComponent("difference.tiff") }
             let screened = unscreen.map { _ in scratch.appendingPathComponent("unscreen.tiff") }
             let generated = [starless, stars, screened].compactMap { $0 }
-            let args = try CLIContract.arguments(input: input, output: starless, stars: stars, unscreen: screened, stride: stride)
+            let args = try CLIContract.arguments(input: input, output: starless, stars: stars,
+                                                unscreen: screened, stride: stride, linear: linear)
             runID = UUID()
             let id = runID
             isProcessing = true

@@ -49,7 +49,7 @@ struct CLIInfo: Decodable {
         guard try releaseVersion >= CLIContract.minimumVersion else {
             throw CLIError.message("StarNet2 \(CLIContract.minimumVersionText) or newer is required. Install the current official CLI.")
         }
-        for flag in ["--input", "--output", "--stride", "--mask", "--unscreen", "--machine-progress"] {
+        for flag in ["--input", "--output", "--stride", "--mask", "--unscreen", "--linear", "--machine-progress"] {
             guard options.contains(where: { $0.flags.contains(flag) }) else {
                 throw CLIError.message("The selected CLI does not support \(flag).")
             }
@@ -82,7 +82,8 @@ enum CLIContract {
             .filter { seen.insert($0.path).inserted }
     }
 
-    static func arguments(input: URL, output: URL, stars: URL?, unscreen: URL? = nil, stride: Int) throws -> [String] {
+    static func arguments(input: URL, output: URL, stars: URL?, unscreen: URL? = nil,
+                          stride: Int, linear: Bool = false) throws -> [String] {
         guard stride >= 2, stride <= 512, stride.isMultiple(of: 2) else {
             throw CLIError.message("Stride must be an even integer from 2 through 512.")
         }
@@ -90,6 +91,7 @@ enum CLIContract {
                     "--stride", String(stride), "--machine-progress"]
         if let stars { args += ["--mask", stars.path] }
         if let unscreen { args += ["--unscreen", unscreen.path] }
+        if linear { args.append("--linear") }
         return args
     }
 

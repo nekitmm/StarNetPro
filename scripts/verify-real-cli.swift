@@ -6,9 +6,11 @@ import AppKit
 struct VerifyRealCLI {
     @MainActor
     static func main() async throws {
-        guard CommandLine.arguments.count == 4 else {
-            throw CLIError.message("Usage: verify-real-cli <starnet2> <real-image.tif> <new-output-directory>")
+        guard CommandLine.arguments.count == 4 ||
+                (CommandLine.arguments.count == 5 && CommandLine.arguments[4] == "--linear") else {
+            throw CLIError.message("Usage: verify-real-cli <starnet2> <real-image.tif> <new-output-directory> [--linear]")
         }
+        let linear = CommandLine.arguments.count == 5
         let executable = URL(fileURLWithPath: CommandLine.arguments[1])
         let input = URL(fileURLWithPath: CommandLine.arguments[2])
         let root = URL(fileURLWithPath: CommandLine.arguments[3])
@@ -17,6 +19,7 @@ struct VerifyRealCLI {
         let info = try JSONDecoder().decode(CLIInfo.self, from: probe.stdout)
         try info.validate()
         print(info.label)
+        print("Linear mode: \(linear)")
         guard CLIContract.licenseURL(executable: executable) != nil else {
             throw CLIError.message("License discovery failed for the real release")
         }
@@ -25,7 +28,7 @@ struct VerifyRealCLI {
         let baselineUnscreen = root.appendingPathComponent("direct-unscreen.tiff")
         let direct = try await CLIProcess.capture(executable,
             ["--input", input.path, "--output", baseline.path, "--mask", baselineStars.path,
-             "--unscreen", baselineUnscreen.path, "--stride", "256", "--machine-progress"], timeout: 300)
+             "--unscreen", baselineUnscreen.path, "--stride", "256", "--machine-progress"] + (linear ? ["--linear"] : []), timeout: 300)
         guard direct.status == 0, !direct.cancelled else {
             throw CLIError.message("Direct inference failed: " + String(decoding: direct.stderr, as: UTF8.self))
         }
@@ -38,7 +41,7 @@ struct VerifyRealCLI {
         let difference = CLIContract.companionURL(starless, suffix: "difference")
         let unscreen = CLIContract.companionURL(starless, suffix: "unscreen")
         processor.startProcessing(executable: executable, input: input, destination: starless,
-                                  difference: difference, unscreen: unscreen, stride: 256)
+                                  difference: difference, unscreen: unscreen, stride: 256, linear: linear)
         var sawProgress = false
         for _ in 0..<15000 {
             if processor.progress > 0 && processor.isProcessing { sawProgress = true }

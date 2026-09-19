@@ -18,10 +18,14 @@ the CLI's optional Difference and Unscreen star outputs.
   content hash. Do not bundle engine files or introduce a source-code license.
 - Test contracts and native Mac processing; document all untested UAT separately.
 
-No FITS preview, other new processing options, CLI release, or public GUI release.
+No FITS preview, processing options beyond those listed below, CLI release, or public GUI release.
 
 ## Simplified first-run screen
 
+- Before initial CLI discovery finishes, show a neutral opening indicator, not
+  installation/update controls. Only a completed discovery may route to setup or
+  the workspace. Later refreshes keep an existing workspace mounted; an optional
+  network update check must not delay opening it.
 - Short status, Download and Install (automatically skipped for a compatible CLI),
   Check on Launch, and Download Manually. Keep advanced location controls in the
   menu bar so a stale custom path cannot strand users behind the setup gate.
@@ -60,3 +64,11 @@ changed terms require acceptance again. Never infer consent from installation.
 - Prove flag mapping with tests, exercise all four output combinations and missing
   companion cases, then compare all three outputs byte-for-byte against a direct
   official CLI run on the real SHO fixture. No GUI-side star arithmetic.
+
+## Linear input option
+
+Expose an unchecked Linear image checkbox for unstretched inputs. Require and
+forward the official --linear capability, leaving stretching/inverse stretching
+entirely to StarNet2. It composes with either or both star outputs. Do not expose
+MTF tuning, change preview/input formats or change the CLI defaults in this slice.
+Test off/on argument routing and real-image direct-CLI parity with --linear.

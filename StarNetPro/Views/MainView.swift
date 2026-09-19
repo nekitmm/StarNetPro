@@ -12,7 +12,10 @@ struct MainView: View {
 
     var body: some View {
         Group {
-            if processor.workspaceAvailable {
+            if !processor.hasCompletedInitialCheck {
+                ProgressView("Opening StarNetPro…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if processor.workspaceAvailable {
                 NavigationView {
                     // 侧边栏
                     SidebarView()
@@ -93,6 +96,10 @@ struct SidebarView: View {
                     Text("A stride of 256 is a good starting point.")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    Toggle("Linear image", isOn: $processor.linearImage)
+                        .toggleStyle(.checkbox)
+                        .help("Enable for unstretched images. StarNet2 stretches for processing, then returns the result to linear data.")
 
                     Text("Star layers").font(.headline)
                     Toggle("Difference", isOn: $processor.createDifference)

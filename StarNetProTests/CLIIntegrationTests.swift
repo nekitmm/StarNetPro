@@ -20,7 +20,7 @@ final class CLIIntegrationTests: XCTestCase {
     }
 
     private func machineInfo(version: String = "2.6.2", product: String = "starnet2", progress: Bool = true) -> String {
-        let flags = ["--input", "--output", "--stride", "--mask", "--unscreen"] + (progress ? ["--machine-progress"] : [])
+        let flags = ["--input", "--output", "--stride", "--mask", "--unscreen", "--linear"] + (progress ? ["--machine-progress"] : [])
         let options = flags.map { "{\"name\":\"\($0.dropFirst(2))\",\"flags\":[\"\($0)\"]}" }.joined(separator: ",")
         return """
         {"schema":"starnetastro.cli.machine-info.v1","product":"\(product)","version":"\(version)","build":"0241","backend":{"display_name":"CoreML"},"options":[\(options)]}
@@ -115,6 +115,30 @@ final class CLIIntegrationTests: XCTestCase {
         }
     }
 
+    func testLinearModeIsOptInAndReachesCLI() async throws {
+        let root = try temporaryDirectory()
+        let input = try fixture(root)
+        let exe = try executable("""
+        linear=off
+        while [ "$#" -gt 0 ]; do
+          case "$1" in --input) input="$2"; shift 2;; --output) output="$2"; shift 2;; --linear) linear=on; shift;; *) shift;; esac
+        done
+        printf 'linear=%s\\n' "$linear"
+        cp "$input" "$output"
+        """)
+        let processor = StarNetProcessor(defaults: defaults(), discover: false)
+        XCTAssertFalse(processor.linearImage)
+        for linear in [false, true] {
+            let output = root.appendingPathComponent("result-\(linear).tiff")
+            let args = try CLIContract.arguments(input: input, output: output, stars: nil, stride: 256, linear: linear)
+            XCTAssertEqual(args.filter { $0 == "--linear" }.count, linear ? 1 : 0)
+            processor.startProcessing(executable: exe, input: input, destination: output, stride: 256, linear: linear)
+            try await waitForProcessing(processor)
+            XCTAssertEqual(processor.progressLabel, "Complete.")
+            XCTAssertTrue(processor.log.contains(linear ? "linear=on" : "linear=off"))
+        }
+    }
+
     func testFragmentedJSONLinesAndUTF8() throws {
         let text = "{\"schema\":\"starnetastro.cli.diagnostic.v1\",\"message\":\"étoile\"}\n{\"schema\":\"future\"}"
         var parser = JSONLines()
@@ -168,6 +192,56 @@ final class CLIIntegrationTests: XCTestCase {
             XCTAssertThrowsError(try InstallerService.validateResponse(HTTPURLResponse(url: url, statusCode: status,
                                                                                        httpVersion: nil, headerFields: nil)!))
         }
+    }
+
+    func testLaunchWaitsForDiscoveryAndRefreshKeepsWorkspace() async throws {
+        let root = try temporaryDirectory()
+        let exe = try executable("sleep 0.2; printf '%s' '\(machineInfo())'", directory: root)
+        let terms = Data("Previously accepted terms".utf8)
+        try terms.write(to: root.appendingPathComponent("LICENSE.txt"))
+        let settings = defaults()
+        settings.set(exe.path, forKey: "cliPath")
+        settings.set(CLIContract.digest(terms), forKey: "acceptedStarNetLicenseSHA256")
+        settings.set(false, forKey: "automaticallyCheckCLIUpdates")
+        let processor = StarNetProcessor(defaults: settings)
+        // This is the first render, before the discovery Task gets executor time.
+        XCTAssertFalse(processor.hasCompletedInitialCheck)
+        for _ in 0..<100 {
+            if processor.isChecking { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(processor.isChecking)
+        XCTAssertFalse(processor.hasCompletedInitialCheck)
+        for _ in 0..<300 {
+            if processor.hasCompletedInitialCheck { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(processor.hasCompletedInitialCheck)
+        XCTAssertTrue(processor.workspaceAvailable)
+        XCTAssertFalse(processor.showLicense)
+
+        let refresh = Task { await processor.refreshCLI() }
+        for _ in 0..<100 {
+            if processor.isChecking { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(processor.isChecking)
+        XCTAssertTrue(processor.hasCompletedInitialCheck)
+        XCTAssertTrue(processor.workspaceAvailable)
+        await refresh.value
+        XCTAssertTrue(processor.workspaceAvailable)
+    }
+
+    func testMissingInstallationFinishesStartupIntoSetup() async throws {
+        let settings = defaults()
+        settings.set(try temporaryDirectory().appendingPathComponent("missing-cli").path, forKey: "cliPath")
+        let processor = StarNetProcessor(defaults: settings, discover: false)
+        XCTAssertFalse(processor.hasCompletedInitialCheck)
+        await processor.refreshCLI()
+        XCTAssertTrue(processor.hasCompletedInitialCheck)
+        XCTAssertFalse(processor.workspaceAvailable)
+        XCTAssertFalse(processor.isChecking)
+        XCTAssertFalse(processor.showLicense)
     }
 
     func testLicenseAcceptancePersistsAndChangesInvalidateIt() async throws {
@@ -253,6 +327,7 @@ final class CLIIntegrationTests: XCTestCase {
             let processor = StarNetProcessor(defaults: settings, discover: false)
             await processor.refreshCLI()
             XCTAssertNil(processor.cliInfo)
+            XCTAssertTrue(processor.hasCompletedInitialCheck)
             XCTAssertFalse(processor.busy)
             XCTAssertFalse(processor.canProcess)
             XCTAssertFalse(processor.canReviewLicense)

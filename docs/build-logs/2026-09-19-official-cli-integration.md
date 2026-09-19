@@ -210,3 +210,37 @@
   ZIP SHA-256: 6089e9b1d46a5f1aeae49a9dd00dfda23feef983cd48e8633e130c6d0bf1feb9.
   Manual pointer/keyboard/accessibility interaction approval remains for UAT;
   automated model tests do not establish the rendered header hit target.
+
+## Neutral startup and linear image option
+
+- User approved the latest interface but reported the install screen flashing on
+  launch before the workspace. Initial nil CLI state was indistinguishable from
+  completed failed discovery. Added hasCompletedInitialCheck, initially false even
+  before the discovery Task runs, and a neutral Opening StarNetPro indicator.
+  The first completed probe routes to setup or workspace; later refreshes do not
+  unmount the workspace. Network update checks do not gate opening the workspace.
+- Added delayed-probe tests covering the immediate first render, discovery in
+  progress, accepted compatible startup and a subsequent refresh. Missing and
+  malformed installations complete discovery into setup rather than loading forever.
+- User additionally requested linear-image processing. Added an unchecked Linear
+  image checkbox and unstretched-input tooltip, required --linear capability and
+  direct CLI argument forwarding. No GUI MTF, format conversion or default change.
+  On/off subprocess tests verify flag routing. The option composes with both stars
+  outputs; existing startup/license safeguards remain unchanged.
+- All 28 native tests passed after both changes; Release build and strict local
+  signature verification passed. git diff --check passed. No pre-commit config
+  exists. Existing Xcode exit-code-zero diagnostic/deprecation warnings persist.
+- Extended the real-image verifier with optional --linear and independent direct
+  arguments; ran on the installed official 2.6.2-0241 CoreML CLI:
+  xcrun swiftc -parse-as-library StarNetPro/Models/*.swift scripts/verify-real-cli.swift -o build/qa/verify-real-cli
+  build/qa/verify-real-cli /usr/local/bin/starnet2 build/qa/SHO.tif build/qa/real-output-r8-linear --linear
+  All saved files were byte-identical to direct CLI linear-mode results, with live
+  progress observed. This proves integration parity, not the fixture's unstretched
+  provenance or a new qualification of the CLI's numerical algorithms.
+  - Starless: 33409990 bytes, cc06e6df077d67a99daa5b2057dc3420c91ce1fa4e03c2ba65846a4ea93bdc8b.
+  - Difference: 5854678 bytes, b06fdee99837c740095102374ba2bf5e8f286bb2df300c7cabe24cff21d99fb3.
+  - Unscreen: 6297282 bytes, bf471036007567f9a97bd7ce2d51976ad793ea8cad77921bafb610ff8728698d.
+- Revealed Downloads/StarNetPro-CLI-upgrade-r8/StarNetPro.app on the Mac.
+  ZIP SHA-256: 3eceaefce20a1f9021aa517df2b525353f4ec07e9b19e2763765a554768760b0.
+  Visual launch/checkbox UAT remains with the user; no CLI installation, stored
+  license acceptance, public release or existing test copy was changed.
