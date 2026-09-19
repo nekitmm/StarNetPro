@@ -125,9 +125,6 @@ directory. The second downloads and verifies the official installer, but never
 opens or installs it. Neither test establishes manual GUI/Installer usability.
 Append `--linear` to the first verifier command to compare linear-mode outputs.
 
-See [verification notes](docs/build-logs/2026-09-19-official-cli-integration.md)
-for tested releases, results and outstanding UAT.
-
 ## Licensing and distribution
 
 The upstream source archive did not declare a source-code license. Original
